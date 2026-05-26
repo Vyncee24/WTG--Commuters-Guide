@@ -1,0 +1,89 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Login — WTG Commuters Guide</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+<div class="auth-page">
+  <div class="auth-card">
+    <div class="auth-logo">
+      <a href="index.html"><h1 style="margin-top: -10px; margin-left: 350px; transform: scaleX(-1)">➦</h1></a>
+      <img src="visuals/WTGLOGO2.png" alt="" width="250">
+      <p>Welcome back! Login with us</p>
+    </div>
+
+    <div id="alert-area"></div>
+
+    <div class="form-group">
+      <label class="form-label" for="email">Email Address</label>
+      <input class="form-control" type="email" id="email" placeholder="PutYourEmailHere@gmail.com" autocomplete="email"/>
+    </div>
+    <div class="form-group">
+      <label class="form-label" for="password">Password</label>
+      <input class="form-control" type="password" id="password" placeholder="Your password" autocomplete="current-password"/>
+    </div>
+
+    <button class="btn btn-primary btn-full btn-lg" id="login-btn" onclick="doLogin()">
+      Sign In
+    </button>
+
+    <div class="auth-divider"><span>or</span></div>
+
+    <p class="text-center text-sm">
+      Don't have an account? <a href="signup.html">Create one</a>
+    </p>
+
+    <div class="divider"></div>
+
+    <div style="background:var(--surface); border-radius:10px; padding:14px; font-size:12px; color:var(--text3); text-align: center;">
+    <strong style="color:var(--text2);">Have suggestions? email us at</strong><br/>
+    WTGCommutersGuide@gmail.com</div>
+    </div>
+  </div>
+</div>
+
+<script src="auth.js"></script>
+<script src="user.js"></script>
+<script>
+  // Redirect if already logged in
+  const sess = AUTH.getSession();
+  if (sess) {
+    window.location.href = sess.role === 'admin' ? 'admin.html' : 'index.html';
+  }
+
+  function doLogin() {
+    const email = document.getElementById('email').value.trim();
+    const password = document.getElementById('password').value;
+    const alertArea = document.getElementById('alert-area');
+    const btn = document.getElementById('login-btn');
+
+    alertArea.innerHTML = '';
+
+    if (!email || !password) {
+      alertArea.innerHTML = '<div class="alert alert-error">Please fill in all fields.</div>';
+      return;
+    }
+
+    btn.disabled = true;
+    btn.textContent = 'Signing in...';
+
+    setTimeout(() => {
+      const result = AUTH.login(email, password);
+      if (result.ok) {
+        window.location.href = result.user.role === 'admin' ? 'admin.html' : 'index.html';
+      } else {
+        alertArea.innerHTML = `<div class="alert alert-error">${result.msg}</div>`;
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    }, 400);
+  }
+
+  // Enter key
+  document.addEventListener('keydown', e => { if (e.key === 'Enter') doLogin(); });
+</script>
+</body>
+</html>

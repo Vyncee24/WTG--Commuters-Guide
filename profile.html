@@ -1,0 +1,176 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>My Routes — WTG</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo"><img src="visuals/WTGLOGO.png" alt="" width="150""><span class="badge">Beta</span></a>
+    <div class="nav-links" id="nav-links">
+      <a href="index.html">Finder</a>
+      <a href="profile.html" class="active">My Routes</a>
+      <a href="#" id="nav-logout">Logout</a>
+    </div>
+  </div>
+</nav>
+
+<div class="container page-wrap">
+
+  <!-- Profile Header -->
+  <div style="display:flex;align-items:center;gap:18px;margin-bottom:36px;padding-bottom:28px;border-bottom:1px solid var(--border);">
+    <div id="user-avatar" style="width:56px;height:56px;border-radius:50%;background:var(--accent);display:flex;align-items:center;justify-content:center;font-size:22px;font-weight:700;color:#fff;flex-shrink:0;"></div>
+    <div>
+      <h2 id="user-name">Loading...</h2>
+      <p id="user-email" class="text-sm text-muted"></p>
+    </div>
+    <div style="margin-left:auto;">
+      <a href="index.html" class="btn btn-primary">Find Route</a>
+    </div>
+  </div>
+
+  <!-- Tabs -->
+  <div class="tabs">
+    <button class="tab-btn active" onclick="switchTab('saved', this)">Saved Routes</button>
+    <button class="tab-btn" onclick="switchTab('history', this)">Search History</button>
+  </div>
+
+  <!-- Saved Routes -->
+  <div id="tab-saved">
+    <div class="section-header">
+      <h3>Saved Routes</h3>
+    </div>
+    <div id="saved-grid" class="saved-routes-grid"></div>
+  </div>
+
+  <!-- History -->
+  <div id="tab-history" class="hidden">
+    <div class="section-header">
+      <h3>Recent Searches</h3>
+      <button class="btn btn-sm btn-ghost" onclick="clearHistory()">Clear All</button>
+    </div>
+    <div id="history-list" class="history-list"></div>
+    
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script src="auth.js"></script>
+<script src="user.js"></script>
+<script src="routes.js"></script>
+<script>
+  const session = AUTH.requireAuth('login.html');
+  if (!session) throw new Error('not logged in');
+
+  // Setup nav
+  document.getElementById('nav-logout').onclick = e => { e.preventDefault(); AUTH.logout(); };
+
+  // User header
+  const user = AUTH.getCurrentUser();
+  document.getElementById('user-name').textContent = user.name;
+  document.getElementById('user-email').textContent = user.email;
+  document.getElementById('user-avatar').textContent = user.name.charAt(0).toUpperCase();
+
+  // Tab switch
+  function switchTab(tab, btn) {
+    document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    document.getElementById('tab-saved').classList.toggle('hidden', tab !== 'saved');
+    document.getElementById('tab-history').classList.toggle('hidden', tab !== 'history');
+    if (tab === 'history') renderHistory();
+  }
+  // Render saved routes
+  function renderSaved() {
+    const saved = USER.getSavedRoutes();
+    const grid = document.getElementById('saved-grid');
+    if (saved.length === 0) {
+      grid.innerHTML = `
+        <div class="empty-state" style="grid-column:1/-1;">
+          <div class="empty-icon"><img src="visuals/Sad.png" alt="" width = "350px"></div>
+          <h3>Oh no! No saved routes yet</h3>
+          <p>Come and try saving routes with us</p>
+          <a href="index.html" class="btn btn-primary mt-16">Find a Route</a>
+        </div>`;
+      return;
+    }
+    grid.innerHTML = saved.map(r => `
+      <div class="route-card">
+        <div class="route-card-from-to">
+          <span class="route-loc">${r.from}</span>
+          <span class="route-arrow">→</span>
+          <span class="route-loc">${r.to}</span>
+        </div>
+        <div class="route-card-meta mt-8">Saved ${timeAgo(r.savedAt)}</div>
+        <div style="display:flex;gap:8px;margin-top:14px;">
+          <button class="btn btn-sm btn-primary flex-1" onclick="viewRoute('${r.from}','${r.to}')">View</button>
+          <button class="btn btn-sm btn-ghost" onclick="unsave('${r.routeId}')">Remove</button>
+        </div>
+      </div>
+    `).join('');
+  }
+
+  // Render history
+  function renderHistory() {
+    const hist = USER.getHistory();
+    const list = document.getElementById('history-list');
+    if (hist.length === 0) {
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">🕓</div>
+          <h3>No search history</h3>
+          <p>Your recent route searches will appear here.</p>
+        </div>`;
+      return;
+    }
+    list.innerHTML = hist.map(h => `
+      <div class="history-item" onclick="viewRoute('${h.from}','${h.to}')">
+        <div>
+          <div class="d-flex align-center gap-8">
+            <span style="font-weight:500;">${h.from}</span>
+            <span class="text-muted">→</span>
+            <span style="font-weight:500;">${h.to}</span>
+          </div>
+          <div class="text-sm text-muted mt-8">${timeAgo(h.searchedAt)}</div>
+        </div>
+        <span style="color:var(--text3);">→</span>
+      </div>
+    `).join('');
+  }
+
+  function viewRoute(from, to) {
+    sessionStorage.setItem('wtg_search', JSON.stringify({ from, to }));
+    window.location.href = 'result.html';
+  }
+
+  function unsave(routeId) {
+    USER.unsaveRoute(routeId);
+    TOAST.show('Route removed.');
+    renderSaved();
+  }
+
+  function clearHistory() {
+    USER.clearHistory();
+    TOAST.show('History cleared.');
+    renderHistory();
+  }
+
+  function timeAgo(iso) {
+    const diff = Date.now() - new Date(iso).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'just now';
+    if (mins < 60) return `${mins}m ago`;
+    const hrs = Math.floor(mins / 60);
+    if (hrs < 24) return `${hrs}h ago`;
+    return `${Math.floor(hrs / 24)}d ago`;
+  }
+
+  renderSaved();
+</script>
+</body>
+</html>
