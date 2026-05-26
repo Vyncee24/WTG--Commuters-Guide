@@ -49,3 +49,5 @@ CREATE TABLE fact_searches (search_id INT PRIMARY KEY AUTO_INCREMENT, user_key I
     - this describes travel paths. it groups the route information into a single table. it says what popular destination 
 //Date Dimension
     - it shows activity spikes when users using the system
+
+    
