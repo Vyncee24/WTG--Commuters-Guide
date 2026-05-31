@@ -131,24 +131,32 @@
     loadResult();
   }
 
-  function toggleSave() {
+  async function toggleSave() {
     if (!session) { TOAST.show('Please log in to save routes.', 'error'); return; }
     if (!currentRoute) return;
-    const saved = USER.isRouteSaved(currentRoute.id);
+    const saved = await USER.isRouteSaved(currentRoute.id);
     if (saved) {
-      USER.unsaveRoute(currentRoute.id);
-      TOAST.show('Route removed from saved.');
+      const ok = await USER.unsaveRoute(currentRoute.id);
+      if (ok) {
+        TOAST.show('Route removed from saved.');
+      } else {
+        TOAST.show('Could not remove saved route.', 'error');
+      }
     } else {
-      USER.saveRoute(currentRoute.id, currentRoute.from, currentRoute.to);
-      TOAST.show('Route saved! 🔖', 'success');
+      const ok = await USER.saveRoute(currentRoute.id, currentRoute.from, currentRoute.to);
+      if (ok) {
+        TOAST.show('Route saved! 🔖', 'success');
+      } else {
+        TOAST.show('Route is already saved.', 'info');
+      }
     }
-    updateSaveBtn();
+    await updateSaveBtn();
   }
 
-  function updateSaveBtn() {
+  async function updateSaveBtn() {
     const btn = document.getElementById('save-btn');
     if (!btn || !currentRoute) return;
-    const saved = USER.isRouteSaved(currentRoute.id);
+    const saved = await USER.isRouteSaved(currentRoute.id);
     btn.textContent = saved ? '✓ Saved' : '🔖 Save Route';
     btn.className = saved ? 'btn btn-primary' : 'btn btn-secondary';
   }

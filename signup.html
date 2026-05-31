@@ -69,8 +69,8 @@
     btn.disabled = true;
     btn.textContent = 'Creating account...';
 
-    setTimeout(() => {
-      const result = AUTH.signup(name, email, password);
+    (async () => {
+      const result = await AUTH.signup(name, email, password);
       if (result.ok) {
         window.location.href = 'index.html';
       } else {
@@ -78,7 +78,7 @@
         btn.disabled = false;
         btn.textContent = 'Create Account';
       }
-    }, 400);
+    })();
   }
 
   document.addEventListener('keydown', e => { if (e.key === 'Enter') doSignup(); });

@@ -1,88 +1,157 @@
 /**
  * user.js — User data module for WTG: Commuters Guide
- * Handles saved routes, history, and comments using localStorage
+ * Handles saved routes, history, and comments using MySQL Backend API
  */
+
+const API_URL = 'http://localhost:5000/api';
 
 const USER = (() => {
 
-  const COMMENTS_KEY = 'wtg_comments';
-
-  /* ── Update current user's data in storage ── */
-  function _updateCurrentUser(fn) {
-    const session = AUTH.getSession();
-    if (!session) return false;
-    const user = AUTH.getCurrentUser();
-    if (!user) return false;
-    const updated = fn(user);
-    AUTH.updateUser(user.id, updated);
-    return true;
+  /* ── Get auth token ── */
+  function _getToken() {
+    return AUTH.getToken();
   }
 
-  /* ── Save a route ── */
-  function saveRoute(routeId, from, to) {
-    _updateCurrentUser(user => {
-      const saved = user.savedRoutes || [];
-      if (saved.find(r => r.routeId === routeId)) return user; // already saved
-      saved.unshift({ routeId, from, to, savedAt: new Date().toISOString() });
-      return { ...user, savedRoutes: saved.slice(0, 50) };
-    });
+  /* ── Save a route via API ── */
+  async function saveRoute(routeId, from, to) {
+    const token = _getToken();
+    if (!token) {
+      alert('Please log in to save routes');
+      return false;
+    }
+
+    try {
+      const response = await fetch(`${API_URL}/user/save-route`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({ routeId, from, to })
+      });
+
+      const data = await response.json();
+
+      if (!response.ok) {
+        if (response.status === 409) {
+          console.warn('Route already saved');
+          return false;
+        }
+        throw new Error(data.error || 'Failed to save route');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Save route error:', error);
+      alert('Could not save route. Please try again.');
+      return false;
+    }
   }
 
-  /* ── Remove saved route ── */
-  function unsaveRoute(routeId) {
-    _updateCurrentUser(user => {
-      const saved = (user.savedRoutes || []).filter(r => r.routeId !== routeId);
-      return { ...user, savedRoutes: saved };
-    });
+  /* ── Remove saved route via API ── */
+  async function unsaveRoute(routeId) {
+    const token = _getToken();
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`${API_URL}/user/saved-routes/${routeId}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to remove saved route');
+      }
+
+      return true;
+    } catch (error) {
+      console.error('Unsave route error:', error);
+      return false;
+    }
   }
 
-  /* ── Check if route is saved ── */
-  function isRouteSaved(routeId) {
-    const user = AUTH.getCurrentUser();
-    if (!user) return false;
-    return !!(user.savedRoutes || []).find(r => r.routeId === routeId);
+  /* ── Check if route is saved via API ── */
+  async function isRouteSaved(routeId) {
+    const token = _getToken();
+    if (!token) return false;
+
+    try {
+      const response = await fetch(`${API_URL}/user/saved-routes`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) return false;
+
+      const routes = await response.json();
+      return routes.some(r => r.route_id === routeId);
+    } catch (error) {
+      console.error('Check saved route error:', error);
+      return false;
+    }
   }
 
-  /* ── Get saved routes ── */
-  function getSavedRoutes() {
-    const user = AUTH.getCurrentUser();
-    return user ? (user.savedRoutes || []) : [];
+  /* ── Get saved routes via API ── */
+  async function getSavedRoutes() {
+    const token = _getToken();
+    if (!token) return [];
+
+    try {
+      const response = await fetch(`${API_URL}/user/saved-routes`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!response.ok) return [];
+
+      return await response.json();
+    } catch (error) {
+      console.error('Get saved routes error:', error);
+      return [];
+    }
   }
 
-  /* ── Add to history ── */
+  /* ── Add to local history (client-side) ── */
   function addHistory(routeId, from, to) {
-    _updateCurrentUser(user => {
-      const hist = user.history || [];
-      // remove duplicate
-      const filtered = hist.filter(h => h.routeId !== routeId);
-      filtered.unshift({ routeId, from, to, searchedAt: new Date().toISOString() });
-      return { ...user, history: filtered.slice(0, 30) };
-    });
+    const history = JSON.parse(localStorage.getItem('wtg_search_history') || '[]');
+    // Remove if exists, add to front
+    const filtered = history.filter(h => h.routeId !== routeId);
+    filtered.unshift({ routeId, from, to, searchedAt: new Date().toISOString() });
+    localStorage.setItem('wtg_search_history', JSON.stringify(filtered.slice(0, 30)));
   }
 
-  /* ── Get history ── */
+  /* ── Get local history ── */
   function getHistory() {
-    const user = AUTH.getCurrentUser();
-    return user ? (user.history || []) : [];
+    return JSON.parse(localStorage.getItem('wtg_search_history') || '[]');
   }
 
-  /* ── Clear history ── */
+  /* ── Clear local history ── */
   function clearHistory() {
-    _updateCurrentUser(user => ({ ...user, history: [] }));
+    localStorage.removeItem('wtg_search_history');
   }
 
-  /* ── Comments ── */
+  /* ── Get comments (local cache) ── */
   function getComments(routeId) {
-    const all = JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}');
+    const all = JSON.parse(localStorage.getItem('wtg_comments') || '{}');
     return all[routeId] || [];
   }
 
+  /* ── Add comment (local) ── */
   function addComment(routeId, text) {
     const session = AUTH.getSession();
     if (!session) return false;
     if (!text.trim()) return false;
-    const all = JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}');
+
+    const all = JSON.parse(localStorage.getItem('wtg_comments') || '{}');
     if (!all[routeId]) all[routeId] = [];
+
     all[routeId].unshift({
       id: Date.now().toString(),
       userId: session.id,
@@ -90,21 +159,25 @@ const USER = (() => {
       text: text.trim(),
       postedAt: new Date().toISOString()
     });
-    localStorage.setItem(COMMENTS_KEY, JSON.stringify(all));
+
+    localStorage.setItem('wtg_comments', JSON.stringify(all));
     return true;
   }
 
+  /* ── Delete comment (local) ── */
   function deleteComment(routeId, commentId) {
     const session = AUTH.getSession();
     if (!session) return false;
-    const all = JSON.parse(localStorage.getItem(COMMENTS_KEY) || '{}');
+
+    const all = JSON.parse(localStorage.getItem('wtg_comments') || '{}');
     if (!all[routeId]) return false;
+
     all[routeId] = all[routeId].filter(c => {
-      // user can delete own, admin can delete any
       if (session.role === 'admin') return c.id !== commentId;
       return !(c.id === commentId && c.userId === session.id);
     });
-    localStorage.setItem(COMMENTS_KEY, JSON.stringify(all));
+
+    localStorage.setItem('wtg_comments', JSON.stringify(all));
     return true;
   }
 
@@ -112,6 +185,7 @@ const USER = (() => {
   function renderComments(routeId, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
+
     const session = AUTH.getSession();
     const comments = getComments(routeId);
 
@@ -147,7 +221,6 @@ const USER = (() => {
           </div>`).join('');
 
     container.innerHTML = `
-      <div class="comment-section">
         <h3>💬 Community Tips & Alternate Routes</h3>
         <p class="text-sm mt-8 mb-16">Know a better route? Share it with fellow commuters!</p>
         ${formHtml}
@@ -156,6 +229,7 @@ const USER = (() => {
     `;
   }
 
+  /* ── Submit comment form ── */
   function submitComment(routeId, containerId) {
     const input = document.getElementById('comment-input');
     if (!input) return;
@@ -168,6 +242,7 @@ const USER = (() => {
     }
   }
 
+  /* ── Remove comment ── */
   function removeComment(routeId, commentId, containerId) {
     deleteComment(routeId, commentId);
     renderComments(routeId, containerId);
@@ -190,10 +265,19 @@ const USER = (() => {
   }
 
   return {
-    saveRoute, unsaveRoute, isRouteSaved, getSavedRoutes,
-    addHistory, getHistory, clearHistory,
-    getComments, addComment, deleteComment,
-    renderComments, submitComment, removeComment
+    saveRoute,
+    unsaveRoute,
+    isRouteSaved,
+    getSavedRoutes,
+    addHistory,
+    getHistory,
+    clearHistory,
+    getComments,
+    addComment,
+    deleteComment,
+    renderComments,
+    submitComment,
+    removeComment
   };
 })();
 

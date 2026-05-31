@@ -86,10 +86,10 @@
     if (tab === 'history') renderHistory();
   }
   // Render saved routes
-  function renderSaved() {
-    const saved = USER.getSavedRoutes();
+  async function renderSaved() {
+    const saved = await USER.getSavedRoutes();
     const grid = document.getElementById('saved-grid');
-    if (saved.length === 0) {
+    if (!saved || saved.length === 0) {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1;">
           <div class="empty-icon"><img src="visuals/Sad.png" alt="" width = "350px"></div>
@@ -102,14 +102,14 @@
     grid.innerHTML = saved.map(r => `
       <div class="route-card">
         <div class="route-card-from-to">
-          <span class="route-loc">${r.from}</span>
+          <span class="route-loc">${r.from_location}</span>
           <span class="route-arrow">→</span>
-          <span class="route-loc">${r.to}</span>
+          <span class="route-loc">${r.to_location}</span>
         </div>
-        <div class="route-card-meta mt-8">Saved ${timeAgo(r.savedAt)}</div>
+        <div class="route-card-meta mt-8">Saved ${timeAgo(r.saved_at)}</div>
         <div style="display:flex;gap:8px;margin-top:14px;">
-          <button class="btn btn-sm btn-primary flex-1" onclick="viewRoute('${r.from}','${r.to}')">View</button>
-          <button class="btn btn-sm btn-ghost" onclick="unsave('${r.routeId}')">Remove</button>
+          <button class="btn btn-sm btn-primary flex-1" onclick="viewRoute('${r.from_location}','${r.to_location}')">View</button>
+          <button class="btn btn-sm btn-ghost" onclick="unsave('${r.route_id}')">Remove</button>
         </div>
       </div>
     `).join('');
@@ -148,10 +148,14 @@
     window.location.href = 'result.html';
   }
 
-  function unsave(routeId) {
-    USER.unsaveRoute(routeId);
-    TOAST.show('Route removed.');
-    renderSaved();
+  async function unsave(routeId) {
+    const ok = await USER.unsaveRoute(routeId);
+    if (ok) {
+      TOAST.show('Route removed.');
+      renderSaved();
+    } else {
+      TOAST.show('Could not remove route.', 'error');
+    }
   }
 
   function clearHistory() {
