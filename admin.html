@@ -115,6 +115,7 @@
     <div class="admin-section" id="section-routes">
       <div class="section-header">
         <h2>Routes</h2>
+        <button class="btn btn-primary" onclick="ADMIN.openAddRouteModal()">+ Add Route</button>
       </div>
 
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
@@ -178,6 +179,83 @@
     <div style="display:flex;gap:10px;margin-top:8px;">
       <button class="btn btn-primary btn-full" onclick="ADMIN.saveEdit()">Save Changes</button>
       <button class="btn btn-ghost btn-full" onclick="ADMIN.closeEditModal()">Cancel</button>
+    </div>
+  </div>
+</div>
+
+<!------------------------------------------------------- ADD ROUTE MODAL ----------------------------------------------------------------------------------------->
+<div class="modal-overlay hidden" id="add-route-modal">
+  <div class="modal" style="max-width:680px;width:95%;max-height:90vh;overflow-y:auto;">
+    <div class="modal-header">
+      <h3>Add New Route</h3>
+      <button class="modal-close" onclick="ADMIN.closeAddRouteModal()">✕</button>
+    </div>
+
+    <p class="text-sm" style="color:var(--text3);margin-bottom:20px;">Fill in the route details. Steps describe each leg of the journey.</p>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+      <div class="form-group">
+        <label class="form-label">From Location <span style="color:var(--red);">*</span></label>
+        <input class="form-control" id="ar-from" type="text" placeholder="e.g. CVSU CCAT" oninput="ADMIN.autoRouteId()"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">To Location <span style="color:var(--red);">*</span></label>
+        <input class="form-control" id="ar-to" type="text" placeholder="e.g. SM Tanza" oninput="ADMIN.autoRouteId()"/>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Route ID <span style="color:var(--red);">*</span> <span style="color:var(--text3);font-weight:400;">(auto-filled from locations, must be unique)</span></label>
+      <input class="form-control" id="ar-route-id" type="text" placeholder="e.g. cvsu-ccat_sm-tanza"/>
+    </div>
+
+    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
+      <div class="form-group">
+        <label class="form-label">Duration</label>
+        <input class="form-control" id="ar-duration" type="text" placeholder="e.g. 45–60 mins"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Total Fare</label>
+        <input class="form-control" id="ar-fare" type="text" placeholder="e.g. ₱30–₱50"/>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Primary Transport</label>
+        <select class="form-control" id="ar-transport">
+          <option value="jeep">Jeep</option>
+          <option value="bus">Bus</option>
+          <option value="tricycle">Tricycle</option>
+          <option value="walk">Walk</option>
+          <option value="fx">FX</option>
+          <option value="uv">UV Express</option>
+        </select>
+      </div>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Tags <span style="color:var(--text3);font-weight:400;">(comma-separated, e.g. Cavite, Student Route)</span></label>
+      <input class="form-control" id="ar-tags" type="text" placeholder="Cavite, Student Route"/>
+    </div>
+
+    <div class="form-group">
+      <label class="form-label">Google Maps Embed URL <span style="color:var(--text3);font-weight:400;">(optional — shows a map or Street View preview on the result page)</span></label>
+      <input class="form-control" id="ar-map-embed-url" type="url" placeholder="https://www.google.com/maps/embed?pb=..."/>
+      <p class="text-sm" style="color:var(--text3);margin-top:6px;">
+        How to get this URL: Open Google Maps → find the location (enter Street View if you want) → click <strong>Share → Embed a map</strong> → copy only the URL inside <code>src="..."</code>.
+      </p>
+    </div>
+
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;">
+      <label class="form-label" style="margin:0;font-size:15px;font-weight:600;">Journey Steps</label>
+      <button type="button" class="btn btn-sm btn-secondary" onclick="ADMIN.addRouteStep()">+ Add Step</button>
+    </div>
+
+    <div id="ar-steps-list"></div>
+
+    <p id="ar-no-steps-hint" class="text-sm" style="color:var(--text3);margin-bottom:16px;">No steps added yet. Click "+ Add Step" to describe each leg of the journey.</p>
+
+    <div style="display:flex;gap:10px;margin-top:20px;">
+      <button class="btn btn-primary btn-full" onclick="ADMIN.submitNewRoute()">Save Route</button>
+      <button class="btn btn-ghost btn-full" onclick="ADMIN.closeAddRouteModal()">Cancel</button>
     </div>
   </div>
 </div>

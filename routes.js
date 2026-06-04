@@ -86,6 +86,37 @@ const ROUTES = (() => {
     }
   }
 
+  function renderStepMap(step) {
+    if (step.mapEmbed && step.mapEmbed.startsWith('https://www.google.com/maps/embed')) {
+      return `
+        <div class="step-map" style="padding:0;overflow:hidden;border-radius:0 0 var(--radius) var(--radius);">
+          <iframe
+            src="${step.mapEmbed}"
+            width="100%"
+            height="260"
+            style="border:0;display:block;"
+            allowfullscreen=""
+            loading="lazy"
+            referrerpolicy="no-referrer-when-downgrade">
+          </iframe>
+        </div>`;
+    }
+    if (step.mapQuery) {
+      return `
+        <div class="step-map">
+          <div style="display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text3);">
+            <img src="visuals/maps.png" alt="Map Icon" style="width:64px;height:auto;">
+            <span style="font-size:13px;">Map: ${decodeURIComponent((step.mapQuery||'').replace(/\+/g,' '))}</span>
+            <a href="https://www.google.com/maps/search/?api=1&query=${step.mapQuery}"
+               target="_blank" class="btn btn-sm btn-secondary" style="margin-top:4px;">
+              Open in Google Maps ↗
+            </a>
+          </div>
+        </div>`;
+    }
+    return '';
+  }
+
   function renderStep(step, total, isLast) {
     const transport = (step.transport || '').toLowerCase();
     const icon  = TRANSPORT_ICONS[transport] || '🚌';
@@ -118,18 +149,36 @@ const ROUTES = (() => {
                 ${signboardHtml}
               </div>
             </div>
-            <div class="step-map">
-              <div style="display:flex;flex-direction:column;align-items:center;gap:8px;color:var(--text3);">
-                <img src="visuals/maps.png" alt="Map Icon" style="width:64px;height:auto;">
-                <span style="font-size:13px;">Map: ${decodeURIComponent((step.mapQuery||'').replace(/\+/g,' '))}</span>
-                <a href="https://www.google.com/maps/search/?api=1&query=${step.mapQuery}"
-                   target="_blank" class="btn btn-sm btn-secondary" style="margin-top:4px;">
-                  Open in Google Maps ↗
-                </a>
-              </div>
-            </div>
+            ${renderStepMap(step)}
           </div>
         </div>
+      </div>`;
+  }
+
+  function renderMapEmbed(mapEmbedUrl) {
+    if (!mapEmbedUrl) return '';
+    const safeUrl = mapEmbedUrl.startsWith('https://www.google.com/maps/embed')
+      ? mapEmbedUrl
+      : '';
+    if (!safeUrl) return '';
+    return `
+      <div style="margin:20px 0;border-radius:var(--radius-lg);overflow:hidden;border:1px solid var(--border);background:var(--bg2);">
+        <div style="padding:10px 14px;display:flex;align-items:center;gap:8px;border-bottom:1px solid var(--border);">
+          <span style="font-size:14px;font-weight:600;color:var(--text2);">📍 Location Preview</span>
+          <a href="${safeUrl.replace('embed?', '?').replace('/embed', '')}" target="_blank"
+             style="margin-left:auto;font-size:12px;color:var(--accent);text-decoration:none;">
+            Open in Google Maps ↗
+          </a>
+        </div>
+        <iframe
+          src="${safeUrl}"
+          width="100%"
+          height="320"
+          style="border:0;display:block;"
+          allowfullscreen=""
+          loading="lazy"
+          referrerpolicy="no-referrer-when-downgrade">
+        </iframe>
       </div>`;
   }
 
@@ -145,9 +194,16 @@ const ROUTES = (() => {
           <span class="badge badge-blue">⏱ ${route.duration || ''}</span>
           <span class="badge badge-green">💵 ${route.fare || ''}</span>
         </div>
-        <h2 style="font-size:1.4rem;">${route.from} → ${route.to}</h2>
+        <div class="route-title-row">
+          <h2 style="font-size:1.4rem;">${route.from} → ${route.to}</h2>
+          <div id="action-bar" class="hidden" style="display:flex;gap:10px;flex-wrap:wrap;align-items:center;">
+            <button class="btn btn-secondary" id="save-btn" onclick="toggleSave()">🔖 Save Route</button>
+            <a href="index.html" class="btn btn-ghost">← New Search</a>
+          </div>
+        </div>
         <p class="mt-8" style="font-size:14px;">${steps.length} step${steps.length !== 1 ? 's' : ''} · Estimated ${route.duration || ''}</p>
       </div>
+      ${renderMapEmbed(route.map_embed_url)}
       <div class="steps-list">${stepsHtml}</div>`;
   }
 

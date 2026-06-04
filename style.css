@@ -246,6 +246,7 @@ select.form-control { cursor: pointer; }
   animation-delay: 0.3s;
 }
 .route-meta { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.route-title-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .steps-list { 
   display: flex; flex-direction: column; gap: 0; 
   /* Smooth Load */

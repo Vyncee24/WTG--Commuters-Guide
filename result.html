@@ -38,12 +38,6 @@
   <!-- Result area -->
   <div id="result-area"></div>
 
-  <!-- Actions -->
-  <div id="action-bar" class="hidden" style="display:flex;gap:10px;margin-top:24px;flex-wrap:wrap;">
-    <button class="btn btn-secondary" id="save-btn" onclick="toggleSave()">🔖 Save Route</button>
-    <a href="index.html" class="btn btn-ghost">← New Search</a>
-  </div>
-
   <!-- Comments -->
   <div id="comments-wrap"></div>
 
@@ -129,8 +123,10 @@
     resultArea.classList.add('fade-in');
 
     // Show action bar
+    // FIX: was actionBar.style.display = 'flex' — but .hidden uses display:none !important
+    // which overrides any inline style. Must remove the class instead.
     const actionBar = document.getElementById('action-bar');
-    actionBar.style.display = 'flex';
+    actionBar.classList.remove('hidden');
     updateSaveBtn();
 
     // Load comments

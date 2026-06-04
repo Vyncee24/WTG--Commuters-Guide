@@ -140,13 +140,13 @@ router.get('/:routeId', async (req, res) => {
 
 router.post('/', verifyAdmin, async (req, res) => {
   try {
-    const { route_id, from_location, to_location, duration, fare, transport_type, tags = [], steps = [] } = req.body;
+    const { route_id, from_location, to_location, duration, fare, transport_type, tags = [], steps = [], map_embed_url } = req.body;
     if (!route_id || !from_location || !to_location) {
       return res.status(400).json({ error: 'route_id, from_location, and to_location are required.' });
     }
     await pool.query(
-      'INSERT INTO routes (route_id, from_location, to_location, duration, fare, transport_type, tags, steps) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
-      [route_id, from_location, to_location, duration || null, fare || null, transport_type || null, JSON.stringify(tags), JSON.stringify(steps)]
+      'INSERT INTO routes (route_id, from_location, to_location, duration, fare, transport_type, tags, steps, map_embed_url) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)',
+      [route_id, from_location, to_location, duration || null, fare || null, transport_type || null, JSON.stringify(tags), JSON.stringify(steps), map_embed_url || null]
     );
     res.status(201).json({ message: 'Route created successfully.' });
   } catch (err) {
@@ -158,20 +158,21 @@ router.post('/', verifyAdmin, async (req, res) => {
 /* ── PUT /api/routes/:routeId — admin update route ── */
 router.put('/:routeId', verifyAdmin, async (req, res) => {
   try {
-    const { from_location, to_location, duration, fare, transport_type, tags, steps } = req.body;
+    const { from_location, to_location, duration, fare, transport_type, tags, steps, map_embed_url } = req.body;
     if (!from_location || !to_location) {
       return res.status(400).json({ error: 'from_location and to_location are required.' });
     }
     const [result] = await pool.query(
       `UPDATE routes SET
         from_location=?, to_location=?, duration=?, fare=?,
-        transport_type=?, tags=?, steps=?
+        transport_type=?, tags=?, steps=?, map_embed_url=?
        WHERE route_id=?`,
       [
         from_location, to_location,
         duration || null, fare || null, transport_type || null,
         JSON.stringify(tags || []),
         JSON.stringify(steps || []),
+        map_embed_url || null,
         req.params.routeId
       ]
     );
