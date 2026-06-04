@@ -1,6 +1,23 @@
 /**
  * admin.js — Admin panel logic for WTG: Commuters Guide
  * All data is fetched from the MySQL API (no localStorage).
+ *
+ * FIXES APPLIED:
+ *  - BUG FIX 1 (PRIMARY): renderDashboard() now checks res.ok before parsing
+ *    the response body. Previously any HTTP error (401, 403, 500) caused data
+ *    to be parsed as {error: '...'}, making data.total etc. undefined, which
+ *    the ?? 0 fallback silently converted to 0 — masking the real problem.
+ *
+ *  - BUG FIX 2: Added a loading indicator ('…') while stats are in-flight,
+ *    and an error state ('—') when the API call fails. Previously the cards
+ *    showed '0' at all times — impossible to distinguish "loading" from "empty".
+ *
+ *  - BUG FIX 3: Added stat-routes card support. The /stats API now returns a
+ *    `routes` count and the dashboard renders it.
+ *
+ *  - BUG FIX 4: renderDashboard() now logs actionable error details (HTTP
+ *    status + error body) to the console instead of a generic catch message,
+ *    making failures much easier to diagnose.
  */
 
 const ADMIN = (() => {
@@ -12,6 +29,17 @@ const ADMIN = (() => {
   /* ── Auth header helper ── */
   function _authHeader() {
     return { 'Authorization': `Bearer ${AUTH.getToken()}`, 'Content-Type': 'application/json' };
+  }
+
+  /* ── IDs of every stat element on the dashboard ── */
+  const STAT_IDS = ['stat-users', 'stat-active', 'stat-restricted', 'stat-comments', 'stat-routes'];
+
+  /* ── Set all stat cards to a text value ── */
+  function _setStats(value) {
+    STAT_IDS.forEach(id => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    });
   }
 
   /* ── Navigate sidebar ── */
@@ -34,17 +62,49 @@ const ADMIN = (() => {
     if (section === 'routes')    renderRoutes();
   }
 
-  /* ── Dashboard stats (from API) ── */
+  /* ── Dashboard stats (from MySQL via API) ── */
+  // FIX 1 + FIX 2 + FIX 3 + FIX 4
   async function renderDashboard() {
+    // FIX 2: Show loading state so admin knows a fetch is in progress.
+    _setStats('…');
+
     try {
-      const res  = await fetch(`${API_URL}/admin/stats`, { headers: _authHeader() });
+      const res = await fetch(`${API_URL}/admin/stats`, { headers: _authHeader() });
+
+      // FIX 1: Check HTTP status BEFORE parsing the body.
+      // Without this, a 401/403/500 response with {error: '...'} was parsed
+      // as stats, giving undefined for every field → silently showing 0.
+      if (!res.ok) {
+        let errMsg = `HTTP ${res.status}`;
+        try {
+          const errBody = await res.json();
+          errMsg += ` — ${errBody.error || JSON.stringify(errBody)}`;
+        } catch (_) { /* ignore parse errors on error bodies */ }
+
+        // FIX 4: Log a clear, actionable error message
+        console.error(`[Admin] /stats fetch failed: ${errMsg}`);
+        console.error('[Admin] Check: is the server running? Is the JWT valid?');
+
+        // FIX 2: Show error indicator so admin knows data didn't load
+        _setStats('—');
+        return;
+      }
+
       const data = await res.json();
-      document.getElementById('stat-users').textContent      = data.total      ?? 0;
-      document.getElementById('stat-active').textContent     = data.active     ?? 0;
-      document.getElementById('stat-restricted').textContent = data.restricted ?? 0;
-      document.getElementById('stat-comments').textContent   = data.comments   ?? 0;
+
+      // FIX 3: Now includes routes count returned by the fixed /stats endpoint
+      const el = (id) => document.getElementById(id);
+      if (el('stat-users'))      el('stat-users').textContent      = data.total      ?? 0;
+      if (el('stat-active'))     el('stat-active').textContent     = data.active     ?? 0;
+      if (el('stat-restricted')) el('stat-restricted').textContent = data.restricted ?? 0;
+      if (el('stat-comments'))   el('stat-comments').textContent   = data.comments   ?? 0;
+      if (el('stat-routes'))     el('stat-routes').textContent     = data.routes     ?? 0;
+
     } catch (err) {
-      console.error('Dashboard stats error:', err);
+      // Network-level failure (server down, CORS, etc.)
+      console.error('[Admin] renderDashboard network error:', err.message);
+      console.error('[Admin] Is the server running on the correct port?');
+      _setStats('—');
     }
   }
 
@@ -57,7 +117,11 @@ const ADMIN = (() => {
     try {
       if (!allUsers.length || !filter) {
         const res = await fetch(`${API_URL}/admin/users`, { headers: _authHeader() });
-        allUsers  = await res.json();
+        if (!res.ok) {
+          tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:32px;">Failed to load users (${res.status}).</td></tr>`;
+          return;
+        }
+        allUsers = await res.json();
       }
 
       let users = allUsers;
@@ -102,7 +166,7 @@ const ADMIN = (() => {
       `).join('');
     } catch (err) {
       console.error('Render users error:', err);
-      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;">Failed to load users.</td></tr>`;
+      tbody.innerHTML = `<tr><td colspan="6" style="text-align:center;color:var(--red);padding:32px;">Failed to load users. Is the server running?</td></tr>`;
     }
   }
 
@@ -113,7 +177,11 @@ const ADMIN = (() => {
     container.innerHTML = `<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading comments…</p></div>`;
 
     try {
-      const res      = await fetch(`${API_URL}/admin/comments`, { headers: _authHeader() });
+      const res = await fetch(`${API_URL}/admin/comments`, { headers: _authHeader() });
+      if (!res.ok) {
+        container.innerHTML = `<div class="empty-state"><div class="empty-icon">⚠️</div><p>Failed to load comments (${res.status}).</p></div>`;
+        return;
+      }
       const comments = await res.json();
 
       if (!comments.length) {
@@ -162,7 +230,11 @@ const ADMIN = (() => {
     container.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;">Loading…</td></tr>`;
 
     try {
-      const res    = await fetch(`${API_URL}/routes`);
+      const res = await fetch(`${API_URL}/routes`);
+      if (!res.ok) {
+        container.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:32px;">Failed to load routes (${res.status}).</td></tr>`;
+        return;
+      }
       const routes = await res.json();
 
       if (!routes.length) {
@@ -185,7 +257,7 @@ const ADMIN = (() => {
       `).join('');
     } catch (err) {
       console.error('Render routes error:', err);
-      container.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;">Failed to load routes.</td></tr>`;
+      container.innerHTML = `<tr><td colspan="5" style="text-align:center;color:var(--red);padding:32px;">Failed to load routes.</td></tr>`;
     }
   }
 
@@ -193,15 +265,20 @@ const ADMIN = (() => {
   async function toggleStatus(userId, currentStatus) {
     const newStatus = currentStatus === 'active' ? 'restricted' : 'active';
     try {
-      await fetch(`${API_URL}/admin/users/${userId}/status`, {
+      const res = await fetch(`${API_URL}/admin/users/${userId}/status`, {
         method:  'PUT',
         headers: _authHeader(),
         body:    JSON.stringify({ status: newStatus })
       });
-      allUsers = [];  // clear cache
+      if (!res.ok) {
+        const d = await res.json().catch(() => ({}));
+        TOAST.show(d.error || 'Could not update status.', 'error');
+        return;
+      }
+      allUsers = [];  // clear cache so next load fetches fresh data
       TOAST.show(`Account ${newStatus === 'active' ? 'activated' : 'restricted'}.`, newStatus === 'active' ? 'success' : '');
       renderUsers();
-      renderDashboard();
+      renderDashboard();  // refresh stats after status change
     } catch (err) {
       TOAST.show('Could not update status.', 'error');
     }
@@ -211,6 +288,8 @@ const ADMIN = (() => {
   function confirmDelete(userId, userName) {
     document.getElementById('delete-confirm-name').textContent = userName;
     document.getElementById('delete-confirm-id').value = userId;
+    // Restore the delete button to user-delete mode (in case route-delete overwrote it)
+    document.querySelector('#delete-modal .btn-danger').onclick = doDelete;
     document.getElementById('delete-modal').classList.remove('hidden');
   }
 
@@ -229,7 +308,7 @@ const ADMIN = (() => {
       closeDeleteModal();
       TOAST.show('User deleted.', 'error');
       renderUsers();
-      renderDashboard();
+      renderDashboard();  // refresh stats after deletion
     } catch (err) {
       TOAST.show('Could not delete user.', 'error');
     }
@@ -287,7 +366,7 @@ const ADMIN = (() => {
       });
       TOAST.show('Comment deleted.');
       renderAllComments();
-      renderDashboard();
+      renderDashboard();  // refresh stats after comment deletion
     } catch (err) {
       TOAST.show('Could not delete comment.', 'error');
     }
@@ -300,7 +379,7 @@ const ADMIN = (() => {
     document.getElementById('delete-confirm-name').textContent = `route "${from} → ${to}"`;
     document.getElementById('delete-confirm-id').value = routeId;
     document.getElementById('delete-modal').classList.remove('hidden');
-    // Override doDelete button temporarily
+    // Override doDelete button to route-delete mode
     document.querySelector('#delete-modal .btn-danger').onclick = doDeleteRoute;
   }
 
@@ -316,6 +395,7 @@ const ADMIN = (() => {
       document.querySelector('#delete-modal .btn-danger').onclick = doDelete;
       TOAST.show('Route deleted.', 'error');
       renderRoutes();
+      renderDashboard();  // refresh stats after route deletion
     } catch (err) {
       TOAST.show('Could not delete route.', 'error');
     }

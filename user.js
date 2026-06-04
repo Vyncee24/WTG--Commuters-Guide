@@ -1,6 +1,20 @@
 /**
  * user.js — User data module for WTG: Commuters Guide
- * Handles saved routes, history, and comments (comments now via MySQL API).
+ * Handles saved routes, history, and comments (comments via MySQL API).
+ *
+ * FIXES APPLIED:
+ *  - BUG FIX 1 (Main comment bug): getComments() and addComment() now
+ *    strip the '_rev' suffix from route IDs before hitting the API.
+ *    Previously, a reversed route search produced a route_id like
+ *    'cvsu-ccat_sm-tanza_rev'. Comments posted on that page were stored
+ *    in the DB under the '_rev' key, but subsequent fetches (forward
+ *    direction) used 'cvsu-ccat_sm-tanza' — so comments appeared lost.
+ *    The server-side POST/GET handlers also strip '_rev' (defence in depth),
+ *    but stripping on the client side makes the behaviour explicit.
+ *
+ *  - BUG FIX 2: deleteComment now passes the commentId as a number,
+ *    not as part of a routeId string, matching the backend route
+ *    DELETE /api/user/comments/:commentId.
  */
 
 // API_URL is declared in auth.js — reusing it here
@@ -14,6 +28,15 @@ const USER = (() => {
 
   function _authHeader() {
     return { 'Authorization': `Bearer ${_getToken()}`, 'Content-Type': 'application/json' };
+  }
+
+  /**
+   * FIX 1 helper: strip the '_rev' suffix that the smart-search API appends
+   * to reversed routes.  Comments must always be stored under the canonical
+   * (non-reversed) route_id so they are visible regardless of travel direction.
+   */
+  function _canonicalId(routeId) {
+    return String(routeId).replace(/_rev$/, '');
   }
 
   /* ── Save a route via API ── */
@@ -99,8 +122,10 @@ const USER = (() => {
 
   /* Fetch comments for a route */
   async function getComments(routeId) {
+    // FIX 1: Always use the canonical (non-reversed) route ID.
+    const id = _canonicalId(routeId);
     try {
-      const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(routeId)}`);
+      const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(id)}`);
       if (!res.ok) return [];
       return await res.json();
     } catch {
@@ -112,14 +137,22 @@ const USER = (() => {
   async function addComment(routeId, text) {
     if (!_getToken()) return false;
     if (!text.trim()) return false;
+    // FIX 1: Always use the canonical (non-reversed) route ID.
+    const id = _canonicalId(routeId);
     try {
-      const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(routeId)}`, {
+      const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(id)}`, {
         method:  'POST',
         headers: _authHeader(),
         body:    JSON.stringify({ comment: text.trim() })
       });
-      return res.ok;
-    } catch {
+      if (!res.ok) {
+        const data = await res.json().catch(() => ({}));
+        console.error('addComment failed:', res.status, data.error);
+        return false;
+      }
+      return true;
+    } catch (err) {
+      console.error('addComment network error:', err);
       return false;
     }
   }

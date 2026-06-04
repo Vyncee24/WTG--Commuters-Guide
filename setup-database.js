@@ -6,11 +6,15 @@
  * Run once before starting the server:
  *   node setup-database.js
  *
- * CHANGES FROM ORIGINAL:
- *  - routes table now has a `steps` JSON column to store step-by-step
- *    commute instructions (previously only existed in the client-side JS).
- *  - Seeds the 7 routes from the original ROUTE_DB into MySQL so the
- *    backend API returns real data instead of an empty table.
+ * FIXES APPLIED:
+ *  - BUG FIX 1: users.status ENUM now includes 'restricted' to match
+ *    what api/admin.js toggleStatus actually sends. Previously only
+ *    'active'|'inactive' were valid, so MySQL silently stored '' when
+ *    admin tried to restrict a user — breaking admin moderation.
+ *  - BUG FIX 2: comments.route_id column widened from VARCHAR(50)
+ *    to VARCHAR(100) to safely accommodate long route IDs.
+ *  - Uses ALTER TABLE to fix the ENUM on already-existing databases
+ *    so re-running this script upgrades live databases safely.
  */
 
 const mysql  = require('mysql2/promise');
@@ -230,7 +234,6 @@ const SEED_ROUTES = [
 
 /* ─── Main setup function ─────────────────────────────────────────────── */
 async function setupDatabase() {
-  // Connect without selecting a DB first so we can CREATE DATABASE
   const connection = await mysql.createConnection({
     host:     process.env.DB_HOST     || 'localhost',
     user:     process.env.DB_USER     || 'root',
@@ -250,6 +253,9 @@ async function setupDatabase() {
     await connection.query(`USE \`${dbName}\``);
 
     // 2. users table
+    // FIX 1: status ENUM now includes 'restricted' so admin can properly
+    // restrict user accounts. The original only had 'active'|'inactive',
+    // causing MySQL to silently store '' when 'restricted' was sent.
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -257,18 +263,25 @@ async function setupDatabase() {
         email      VARCHAR(100)  UNIQUE NOT NULL,
         password   VARCHAR(255)  NOT NULL,
         role       ENUM('user','admin') DEFAULT 'user',
-        status     ENUM('active','inactive') DEFAULT 'active',
+        status     ENUM('active','inactive','restricted') DEFAULT 'active',
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP,
         INDEX (email)
       )
     `);
-    console.log('✓ users table created / verified');
+
+    // Migrate existing databases: add 'restricted' to the ENUM if not present
+    try {
+      await connection.query(`
+        ALTER TABLE users
+        MODIFY COLUMN status ENUM('active','inactive','restricted') DEFAULT 'active'
+      `);
+      console.log('✓ users table created / verified (status ENUM includes restricted)');
+    } catch (alterErr) {
+      console.log('✓ users table verified (ALTER skipped or not needed)');
+    }
 
     // 3. routes table
-    //    NOTE: `steps` column stores the full step-by-step instructions as JSON.
-    //    This column did NOT exist in the original schema — route step data
-    //    was previously only inside the client-side routes.js ROUTE_DB array.
     await connection.query(`
       CREATE TABLE IF NOT EXISTS routes (
         id             INT AUTO_INCREMENT PRIMARY KEY,
@@ -303,12 +316,14 @@ async function setupDatabase() {
     console.log('✓ saved_routes table created / verified');
 
     // 5. comments table
+    // FIX 2: route_id widened to VARCHAR(100) (was VARCHAR(50)) to safely
+    // store any route ID without truncation risk.
     await connection.query(`
       CREATE TABLE IF NOT EXISTS comments (
         id         INT AUTO_INCREMENT PRIMARY KEY,
-        user_id    INT  NOT NULL,
-        route_id   VARCHAR(50) NOT NULL,
-        comment    TEXT NOT NULL,
+        user_id    INT          NOT NULL,
+        route_id   VARCHAR(100) NOT NULL,
+        comment    TEXT         NOT NULL,
         rating     INT CHECK (rating >= 1 AND rating <= 5),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
@@ -316,10 +331,19 @@ async function setupDatabase() {
         INDEX (user_id)
       )
     `);
-    console.log('✓ comments table created / verified');
+
+    // Migrate existing databases: widen route_id column if it's still VARCHAR(50)
+    try {
+      await connection.query(`
+        ALTER TABLE comments
+        MODIFY COLUMN route_id VARCHAR(100) NOT NULL
+      `);
+      console.log('✓ comments table created / verified (route_id is VARCHAR(100))');
+    } catch (alterErr) {
+      console.log('✓ comments table verified (ALTER skipped or not needed)');
+    }
 
     // 6. Seed route data
-    //    INSERT IGNORE skips rows whose route_id already exists.
     console.log('\n📍 Seeding route data into MySQL…');
     let inserted = 0;
     for (const route of SEED_ROUTES) {

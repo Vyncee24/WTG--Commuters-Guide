@@ -1,10 +1,28 @@
 /**
  * auth.js — Authentication module for WTG: Commuters Guide
  * Handles login, signup, session, and role management using MySQL Backend API
+ *
+ * FIX APPLIED:
+ *  - API_URL is now derived from window.location instead of being hardcoded
+ *    to 'http://localhost:5000/api'. The hardcoded URL caused ALL API calls
+ *    (including dashboard stats) to fail with a network error when:
+ *      a) The server ran on a port other than 5000
+ *      b) The site was accessed from a network IP (e.g. 192.168.x.x)
+ *      c) The app was deployed to any non-localhost environment
+ *    Since server.js serves both static files and the API on the same port,
+ *    using window.location.origin + '/api' always resolves correctly.
+ *
+ *    Fallback: if the page is somehow opened as file:// (not via Express),
+ *    the code defaults to localhost:5000 to preserve existing dev behaviour.
  */
 
-const API_URL = 'http://localhost:5000/api';
-const TOKEN_KEY = 'wtg_token';
+// FIX: Derive API_URL from the current page origin so it works on any host/port.
+// server.js serves static files AND API routes on the same port, so this is safe.
+const API_URL = (window.location.protocol === 'file:')
+  ? 'http://localhost:5000/api'                    // fallback for direct file:// access
+  : `${window.location.origin}/api`;               // correct for Express-served pages
+
+const TOKEN_KEY   = 'wtg_token';
 const SESSION_KEY = 'wtg_session';
 
 const AUTH = (() => {
@@ -13,7 +31,7 @@ const AUTH = (() => {
   function init() {
     const token = getToken();
     if (token) {
-      // Token exists, user is already logged in
+      // Token exists; refresh the session from the server in the background.
       loadUserSession();
     }
   }
@@ -94,14 +112,13 @@ const AUTH = (() => {
         return { ok: false, msg: data.error || 'Login failed.' };
       }
 
-      // Store token and session
       setToken(data.token);
       setSession(data.user);
 
       return { ok: true, user: data.user };
     } catch (error) {
       console.error('Login error:', error);
-      return { ok: false, msg: 'Connection error. Please check your internet.' };
+      return { ok: false, msg: 'Connection error. Is the server running?' };
     }
   }
 
@@ -131,13 +148,12 @@ const AUTH = (() => {
         return { ok: false, msg: data.error || 'Signup failed.' };
       }
 
-      // Store token and session immediately after successful signup
       setToken(data.token);
       setSession(data.user);
       return { ok: true, user: data.user };
     } catch (error) {
       console.error('Signup error:', error);
-      return { ok: false, msg: 'Connection error. Please check your internet.' };
+      return { ok: false, msg: 'Connection error. Is the server running?' };
     }
   }
 

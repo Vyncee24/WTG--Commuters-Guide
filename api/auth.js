@@ -96,6 +96,18 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
+    // Check account status BEFORE issuing a token.
+    // Without this check a restricted user could log in and receive a valid JWT,
+    // bypassing restriction entirely. The verifyToken middleware in api/user.js
+    // blocks restricted users from subsequent API calls, but that is too late —
+    // the token is already in their hands.
+    if (user.status === 'restricted') {
+      connection.release();
+      return res.status(403).json({
+        error: 'Your account has been restricted. Please contact support.'
+      });
+    }
+
     // Create JWT token
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },

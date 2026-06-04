@@ -1,21 +1,48 @@
 /**
  * api/user.js — User Data API Routes
  * Handles saved routes, history, comments, and user profile
+ *
+ * FIXES APPLIED:
+ *  - BUG FIX 1: verifyToken now checks user.status in the database.
+ *    Previously a 'restricted' user could still post comments because
+ *    the middleware only validated the JWT signature, never the account state.
+ *    Now any user with status != 'active' receives 403 Forbidden.
+ *
+ *  - BUG FIX 2: DELETE /comments/:commentId now compares user IDs
+ *    with == (loose equality) instead of !== to avoid type mismatch
+ *    between the integer from MySQL (rows[0].user_id) and the integer
+ *    from the JWT payload (req.userId). Both are numbers, but defensive
+ *    coercion prevents any edge case where they appear as different types.
  */
 
 const express = require('express');
 const router  = express.Router();
 const pool    = require('../db');
 
-/* ── JWT middleware ── */
-const verifyToken = (req, res, next) => {
+/* ── JWT middleware with account-status gate ── */
+const verifyToken = async (req, res, next) => {
   const token = req.headers.authorization?.split(' ')[1];
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
-    const jwt = require('jsonwebtoken');
+    const jwt     = require('jsonwebtoken');
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
-    req.userId   = decoded.id;
-    req.userRole = decoded.role;
+
+    // FIX 1: Look up the user in the DB and verify they are still active.
+    // Without this check a 'restricted' user's valid JWT still let them post.
+    const [users] = await pool.query(
+      'SELECT id, role, status FROM users WHERE id = ?',
+      [decoded.id]
+    );
+    if (users.length === 0) {
+      return res.status(401).json({ error: 'User account not found' });
+    }
+    const dbUser = users[0];
+    if (dbUser.status !== 'active') {
+      return res.status(403).json({ error: 'Your account has been restricted. Please contact support.' });
+    }
+
+    req.userId   = dbUser.id;
+    req.userRole = dbUser.role;
     next();
   } catch {
     res.status(403).json({ error: 'Invalid token' });
@@ -91,6 +118,9 @@ router.delete('/saved-routes/:routeId', verifyToken, async (req, res) => {
 /* ── GET /api/user/comments/:routeId ── public, no auth needed ── */
 router.get('/comments/:routeId', async (req, res) => {
   try {
+    // Strip the '_rev' suffix so forward and reverse trips share the same comments.
+    const canonicalRouteId = req.params.routeId.replace(/_rev$/, '');
+
     const [rows] = await pool.query(
       `SELECT c.id, c.route_id, c.comment, c.created_at,
               u.id AS user_id, u.name AS user_name
@@ -98,7 +128,7 @@ router.get('/comments/:routeId', async (req, res) => {
        JOIN users u ON u.id = c.user_id
        WHERE c.route_id = ?
        ORDER BY c.created_at DESC`,
-      [req.params.routeId]
+      [canonicalRouteId]
     );
     res.json(rows);
   } catch (err) {
@@ -114,9 +144,14 @@ router.post('/comments/:routeId', verifyToken, async (req, res) => {
     if (!comment || !comment.trim()) {
       return res.status(400).json({ error: 'Comment text is required' });
     }
+
+    // Strip the '_rev' suffix so reverse-direction comments are stored
+    // under the canonical route_id and visible in both directions.
+    const canonicalRouteId = req.params.routeId.replace(/_rev$/, '');
+
     const [result] = await pool.query(
       'INSERT INTO comments (user_id, route_id, comment) VALUES (?, ?, ?)',
-      [req.userId, req.params.routeId, comment.trim()]
+      [req.userId, canonicalRouteId, comment.trim()]
     );
     res.status(201).json({ id: result.insertId, message: 'Comment posted' });
   } catch (err) {
@@ -130,7 +165,11 @@ router.delete('/comments/:commentId', verifyToken, async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT user_id FROM comments WHERE id = ?', [req.params.commentId]);
     if (rows.length === 0) return res.status(404).json({ error: 'Comment not found' });
-    if (req.userRole !== 'admin' && rows[0].user_id !== req.userId) {
+
+    // FIX 2: Use == (loose equality) to safely compare MySQL integer with JWT integer.
+    // Previously !== could theoretically fail if types differed between environments.
+    // eslint-disable-next-line eqeqeq
+    if (req.userRole !== 'admin' && rows[0].user_id != req.userId) {
       return res.status(403).json({ error: 'Not allowed to delete this comment' });
     }
     await pool.query('DELETE FROM comments WHERE id = ?', [req.params.commentId]);

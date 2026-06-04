@@ -1,6 +1,19 @@
+/**
+ * routes.js — Client-side route lookup module for WTG: Commuters Guide
+ *
+ * FIX APPLIED:
+ *  - API_BASE was hardcoded to 'http://localhost:5000/api/routes'.
+ *    Changed to use window.location.origin so it works on any host/port,
+ *    matching the same fix applied to auth.js.
+ */
+
 const ROUTES = (() => {
 
-  const API_BASE = 'http://localhost:5000/api/routes';
+  // FIX: Use window.location.origin instead of hardcoded localhost:5000.
+  // API_URL (from auth.js) is already fixed; mirror the same logic here.
+  const API_BASE = (window.location.protocol === 'file:')
+    ? 'http://localhost:5000/api/routes'
+    : `${window.location.origin}/api/routes`;
 
   const TRANSPORT_ICONS = {
     jeep: '🚐', bus: '🚌', tricycle: '🛺',
