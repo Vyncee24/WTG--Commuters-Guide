@@ -11,7 +11,7 @@
 <!-- Navigation -->
 <nav class="nav">
   <div class="nav-inner">
-    <a href="index.html" class="nav-logo"><img src="visuals/WTGLOGO.png" alt="" width="150""><span class="badge">Beta</span></a>
+    <a href="index.html" class="nav-logo"><img src="visuals/WTGLOGO.png" alt="" width="150"><span class="badge">Beta</span></a>
     <div class="nav-links" id="nav-links">
       <a href="index.html" class="active">Finder</a>
       <a href="profile.html">My Routes</a>
@@ -50,7 +50,9 @@
     <div class="section-header">
       <h2>Popular Routes</h2>
     </div>
-    <div class="saved-routes-grid" id="popular-grid"></div>
+    <div class="saved-routes-grid" id="popular-grid">
+      <!-- populated by JS below -->
+    </div>
   </div>
 </section>
 
@@ -66,7 +68,6 @@
     const authLink = document.getElementById('nav-auth');
     authLink.textContent = session.name.split(' ')[0];
     authLink.href = session.role === 'admin' ? 'admin.html' : 'profile.html';
-    // Add logout
     const logoutBtn = document.createElement('a');
     logoutBtn.href = '#';
     logoutBtn.textContent = 'Logout';
@@ -74,31 +75,52 @@
     document.getElementById('nav-links').appendChild(logoutBtn);
   }
 
-  /* ── Autocomplete ── */
-  const locs = ROUTES.getAllLocations();
-  const dl = document.getElementById('location-list');
-  locs.forEach(l => {
-    const opt = document.createElement('option');
-    opt.value = l; dl.appendChild(opt);
-  });
+  /* ── Page init: load autocomplete + popular routes from MySQL API ── */
+  async function initPage() {
 
-  /* ── Popular routes ── */
-  const popular = ROUTES.getPopular();
-  const grid = document.getElementById('popular-grid');
-  grid.innerHTML = popular.map(r => `
-    <div class="route-card" onclick="goTo('${r.from}','${r.to}')">
-      <div class="route-card-from-to">
-        <span class="route-loc">${r.from}</span>
-        <span class="route-arrow">→</span>
-        <span class="route-loc">${r.to}</span>
-      </div>
-      <div class="d-flex align-center gap-8 mt-8">
-        ${r.tags.map(t=>`<span class="badge badge-gray">${t}</span>`).join('')}
-        <span class="badge badge-blue">⏱ ${r.duration}</span>
-      </div>
-      <div class="route-card-meta mt-8">${r.steps.length} steps · ${r.fare}</div>
-    </div>
-  `).join('');
+    // --- Autocomplete: fetch location list from MySQL via API ---
+    // CHANGED: was synchronous `ROUTES.getAllLocations()` (returned from
+    // hard-coded ROUTE_DB).  Now awaits the API call to MySQL.
+    try {
+      const locs = await ROUTES.getAllLocations();
+      const dl = document.getElementById('location-list');
+      locs.forEach(l => {
+        const opt = document.createElement('option');
+        opt.value = l;
+        dl.appendChild(opt);
+      });
+    } catch (e) {
+      console.warn('Could not load location autocomplete:', e);
+    }
+
+    // --- Popular routes: fetch from MySQL via API ---
+    // CHANGED: was synchronous `ROUTES.getPopular()`.  Now awaited.
+    const grid = document.getElementById('popular-grid');
+    try {
+      const popular = await ROUTES.getPopular();
+      if (popular.length === 0) {
+        grid.innerHTML = '<p style="color:var(--text3)">No popular routes yet.</p>';
+      } else {
+        grid.innerHTML = popular.map(r => `
+          <div class="route-card" onclick="goTo('${r.from}','${r.to}')">
+            <div class="route-card-from-to">
+              <span class="route-loc">${r.from}</span>
+              <span class="route-arrow">→</span>
+              <span class="route-loc">${r.to}</span>
+            </div>
+            <div class="d-flex align-center gap-8 mt-8">
+              ${(r.tags || []).map(t => `<span class="badge badge-gray">${t}</span>`).join('')}
+              <span class="badge badge-blue">⏱ ${r.duration || ''}</span>
+            </div>
+            <div class="route-card-meta mt-8">${(r.steps || []).length} steps · ${r.fare || ''}</div>
+          </div>
+        `).join('');
+      }
+    } catch (e) {
+      grid.innerHTML = '<p style="color:var(--text3)">Could not load popular routes.</p>';
+      console.warn('Popular routes load error:', e);
+    }
+  }
 
   function goTo(from, to) {
     document.getElementById('from-input').value = from;
@@ -106,19 +128,23 @@
     findRoute();
   }
 
-  /* ── Route finder ── */
+  /* ── Route finder: saves params then goes to result.html ── */
   function findRoute() {
     const from = document.getElementById('from-input').value.trim();
-    const to = document.getElementById('to-input').value.trim();
-    if (!from || !to) { TOAST.show('Please enter both From and Destination.', 'error'); return; }
-
-    // Save search params and redirect
+    const to   = document.getElementById('to-input').value.trim();
+    if (!from || !to) {
+      TOAST.show('Please enter both From and Destination.', 'error');
+      return;
+    }
     sessionStorage.setItem('wtg_search', JSON.stringify({ from, to }));
     window.location.href = 'result.html';
   }
 
   // Allow Enter key
   document.addEventListener('keydown', e => { if (e.key === 'Enter') findRoute(); });
+
+  // Boot
+  initPage();
 </script>
 </body>
 </html>

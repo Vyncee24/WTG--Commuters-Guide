@@ -3,8 +3,8 @@
  * Handles API routes and MySQL database operations
  */
 
-const express = require('express');
-const cors = require('cors');
+const express    = require('express');
+const cors       = require('cors');
 const bodyParser = require('body-parser');
 require('dotenv').config();
 
@@ -19,13 +19,15 @@ app.use(bodyParser.urlencoded({ extended: true }));
 app.use(express.static('.'));
 
 // API Routes
-const authRoutes = require('./api/auth');
-const userRoutes = require('./api/user');
-const routesAPI = require('./api/routes');
+const authRoutes  = require('./api/auth');
+const userRoutes  = require('./api/user');
+const routesAPI   = require('./api/routes');
+const adminRoutes = require('./api/admin');
 
-app.use('/api/auth', authRoutes);
-app.use('/api/user', userRoutes);
+app.use('/api/auth',  authRoutes);
+app.use('/api/user',  userRoutes);
 app.use('/api/routes', routesAPI);
+app.use('/api/admin', adminRoutes);
 
 // Health check endpoint
 app.get('/api/health', (req, res) => {

@@ -31,6 +31,9 @@
     <div class="admin-nav-item" data-section="comments" onclick="ADMIN.navigate('comments')">
       <img src="visuals/chat-bubble.png" alt="" width="30px" style="margin-right: 15px;"> Comments 
     </div>
+    <div class="admin-nav-item" data-section="routes" onclick="ADMIN.navigate('routes')">
+      <img src="visuals/maps.png" alt="" width="30px" style="margin-right: 15px;"> Routes 
+    </div>
   </aside>
 
   <main class="admin-content">
@@ -63,6 +66,7 @@
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
           <button class="btn btn-secondary" onclick="ADMIN.navigate('users')">👥 Manage Users</button>
           <button class="btn btn-secondary" onclick="ADMIN.navigate('comments')">💬 Moderate Comments</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('routes')">🗺 Manage Routes</button>
         </div>
       </div>
     </div>
@@ -103,6 +107,32 @@
       <div id="all-comments-container"></div>
     </div>
 
+    <!------------------------------------------------------- ROUTES ----------------------------------------------------------------------------------------->
+    <div class="admin-section" id="section-routes">
+      <div class="section-header">
+        <h2>Routes</h2>
+      </div>
+
+      <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
+        <div style="overflow-x:auto;">
+          <table class="user-table">
+            <thead>
+              <tr>
+                <th>Route ID</th>
+                <th>From</th>
+                <th>To</th>
+                <th>Duration / Fare</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="routes-tbody">
+              <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;">Loading...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
   </main>
 </div>
 
@@ -110,7 +140,7 @@
 <div class="modal-overlay hidden" id="delete-modal">
   <div class="modal">
     <div class="modal-header">
-      <h3>Delete User</h3>
+      <h3>Confirm Delete</h3>
       <button class="modal-close" onclick="ADMIN.closeDeleteModal()">✕</button>
     </div>
     <p>Are you sure you want to delete <strong id="delete-confirm-name"></strong>? This cannot be undone.</p>
