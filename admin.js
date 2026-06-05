@@ -1,40 +1,16 @@
-/**
- * admin.js — Admin panel logic for WTG: Commuters Guide
- * All data is fetched from the MySQL API (no localStorage).
- *
- * FIXES APPLIED:
- *  - BUG FIX 1 (PRIMARY): renderDashboard() now checks res.ok before parsing
- *    the response body. Previously any HTTP error (401, 403, 500) caused data
- *    to be parsed as {error: '...'}, making data.total etc. undefined, which
- *    the ?? 0 fallback silently converted to 0 — masking the real problem.
- *
- *  - BUG FIX 2: Added a loading indicator ('…') while stats are in-flight,
- *    and an error state ('—') when the API call fails. Previously the cards
- *    showed '0' at all times — impossible to distinguish "loading" from "empty".
- *
- *  - BUG FIX 3: Added stat-routes card support. The /stats API now returns a
- *    `routes` count and the dashboard renders it.
- *
- *  - BUG FIX 4: renderDashboard() now logs actionable error details (HTTP
- *    status + error body) to the console instead of a generic catch message,
- *    making failures much easier to diagnose.
- */
-
 const ADMIN = (() => {
 
   let currentSection = 'dashboard';
   let editingUserId  = null;
-  let allUsers       = [];   // cached after fetch
+  let allUsers       = [];
 
-  /* ── Auth header helper ── */
+  /* ------------------------------------------------------- AUTH HEADER --------------------------------------------------------------------------------------- */
   function _authHeader() {
     return { 'Authorization': `Bearer ${AUTH.getToken()}`, 'Content-Type': 'application/json' };
   }
 
-  /* ── IDs of every stat element on the dashboard ── */
   const STAT_IDS = ['stat-users', 'stat-active', 'stat-restricted', 'stat-comments', 'stat-routes'];
 
-  /* ── Set all stat cards to a text value ── */
   function _setStats(value) {
     STAT_IDS.forEach(id => {
       const el = document.getElementById(id);
@@ -42,7 +18,7 @@ const ADMIN = (() => {
     });
   }
 
-  /* ── Navigate sidebar ── */
+  /* ------------------------------------------------------- NAVIGATION --------------------------------------------------------------------------------------- */
   function navigate(section) {
     document.querySelectorAll('.admin-section').forEach(s => s.classList.remove('active'));
     document.querySelectorAll('.admin-nav-item').forEach(n => n.classList.remove('active'));
@@ -54,7 +30,6 @@ const ADMIN = (() => {
     renderSection(section);
   }
 
-  /* ── Render section content ── */
   function renderSection(section) {
     if (section === 'dashboard') renderDashboard();
     if (section === 'users')     renderUsers();
@@ -62,53 +37,35 @@ const ADMIN = (() => {
     if (section === 'routes')    renderRoutes();
   }
 
-  /* ── Dashboard stats (from MySQL via API) ── */
-  // FIX 1 + FIX 2 + FIX 3 + FIX 4
+  /* ------------------------------------------------------- DASHBOARD --------------------------------------------------------------------------------------- */
   async function renderDashboard() {
-    // FIX 2: Show loading state so admin knows a fetch is in progress.
     _setStats('…');
-
     try {
       const res = await fetch(`${API_URL}/admin/stats`, { headers: _authHeader() });
-
-      // FIX 1: Check HTTP status BEFORE parsing the body.
-      // Without this, a 401/403/500 response with {error: '...'} was parsed
-      // as stats, giving undefined for every field → silently showing 0.
       if (!res.ok) {
         let errMsg = `HTTP ${res.status}`;
         try {
           const errBody = await res.json();
           errMsg += ` — ${errBody.error || JSON.stringify(errBody)}`;
-        } catch (_) { /* ignore parse errors on error bodies */ }
-
-        // FIX 4: Log a clear, actionable error message
+        } catch (_) {}
         console.error(`[Admin] /stats fetch failed: ${errMsg}`);
-        console.error('[Admin] Check: is the server running? Is the JWT valid?');
-
-        // FIX 2: Show error indicator so admin knows data didn't load
         _setStats('—');
         return;
       }
-
       const data = await res.json();
-
-      // FIX 3: Now includes routes count returned by the fixed /stats endpoint
       const el = (id) => document.getElementById(id);
       if (el('stat-users'))      el('stat-users').textContent      = data.total      ?? 0;
       if (el('stat-active'))     el('stat-active').textContent     = data.active     ?? 0;
       if (el('stat-restricted')) el('stat-restricted').textContent = data.restricted ?? 0;
       if (el('stat-comments'))   el('stat-comments').textContent   = data.comments   ?? 0;
       if (el('stat-routes'))     el('stat-routes').textContent     = data.routes     ?? 0;
-
     } catch (err) {
-      // Network-level failure (server down, CORS, etc.)
       console.error('[Admin] renderDashboard network error:', err.message);
-      console.error('[Admin] Is the server running on the correct port?');
       _setStats('—');
     }
   }
 
-  /* ── Render users table (from API) ── */
+  /* ------------------------------------------------------- USERS --------------------------------------------------------------------------------------- */
   async function renderUsers(filter = '') {
     const tbody = document.getElementById('users-tbody');
     if (!tbody) return;
@@ -170,7 +127,7 @@ const ADMIN = (() => {
     }
   }
 
-  /* ── Render all comments (from API) ── */
+  /* ------------------------------------------------------- COMMENTS --------------------------------------------------------------------------------------- */
   async function renderAllComments() {
     const container = document.getElementById('all-comments-container');
     if (!container) return;
@@ -223,7 +180,7 @@ const ADMIN = (() => {
     }
   }
 
-  /* ── Render routes table (from API) ── */
+  /* ------------------------------------------------------- ROUTES --------------------------------------------------------------------------------------- */
   async function renderRoutes() {
     const container = document.getElementById('routes-tbody');
     if (!container) return;
@@ -261,7 +218,7 @@ const ADMIN = (() => {
     }
   }
 
-  /* ── Toggle restrict/active (API) ── */
+  /* ------------------------------------------------------- USER STATUS --------------------------------------------------------------------------------------- */
   async function toggleStatus(userId, currentStatus) {
     const newStatus = currentStatus === 'active' ? 'restricted' : 'active';
     try {
@@ -275,20 +232,19 @@ const ADMIN = (() => {
         TOAST.show(d.error || 'Could not update status.', 'error');
         return;
       }
-      allUsers = [];  // clear cache so next load fetches fresh data
+      allUsers = [];
       TOAST.show(`Account ${newStatus === 'active' ? 'activated' : 'restricted'}.`, newStatus === 'active' ? 'success' : '');
       renderUsers();
-      renderDashboard();  // refresh stats after status change
+      renderDashboard();
     } catch (err) {
       TOAST.show('Could not update status.', 'error');
     }
   }
 
-  /* ── Confirm delete user ── */
+  /* ------------------------------------------------------- DELETE USER --------------------------------------------------------------------------------------- */
   function confirmDelete(userId, userName) {
     document.getElementById('delete-confirm-name').textContent = userName;
     document.getElementById('delete-confirm-id').value = userId;
-    // Restore the delete button to user-delete mode (in case route-delete overwrote it)
     document.querySelector('#delete-modal .btn-danger').onclick = doDelete;
     document.getElementById('delete-modal').classList.remove('hidden');
   }
@@ -304,17 +260,17 @@ const ADMIN = (() => {
         method:  'DELETE',
         headers: _authHeader()
       });
-      allUsers = [];  // clear cache
+      allUsers = [];
       closeDeleteModal();
       TOAST.show('User deleted.', 'error');
       renderUsers();
-      renderDashboard();  // refresh stats after deletion
+      renderDashboard();
     } catch (err) {
       TOAST.show('Could not delete user.', 'error');
     }
   }
 
-  /* ── Edit modal ── */
+  /* ------------------------------------------------------- EDIT USER --------------------------------------------------------------------------------------- */
   function openEditModal(userId) {
     const user = allUsers.find(u => u.id === userId);
     if (!user) return;
@@ -348,7 +304,7 @@ const ADMIN = (() => {
         TOAST.show(data.error || 'Update failed.', 'error');
         return;
       }
-      allUsers = [];  // clear cache
+      allUsers = [];
       closeEditModal();
       TOAST.show('User updated.', 'success');
       renderUsers();
@@ -357,7 +313,7 @@ const ADMIN = (() => {
     }
   }
 
-  /* ── Delete comment (API) ── */
+  /* ------------------------------------------------------- DELETE COMMENT --------------------------------------------------------------------------------------- */
   async function deleteComment(commentId) {
     try {
       await fetch(`${API_URL}/admin/comments/${commentId}`, {
@@ -366,20 +322,20 @@ const ADMIN = (() => {
       });
       TOAST.show('Comment deleted.');
       renderAllComments();
-      renderDashboard();  // refresh stats after comment deletion
+      renderDashboard();
     } catch (err) {
       TOAST.show('Could not delete comment.', 'error');
     }
   }
 
-  /* ── Confirm delete route ── */
+  /* ------------------------------------------------------- DELETE ROUTE --------------------------------------------------------------------------------------- */
   let _pendingDeleteRouteId = null;
+
   function confirmDeleteRoute(routeId, from, to) {
     _pendingDeleteRouteId = routeId;
     document.getElementById('delete-confirm-name').textContent = `route "${from} → ${to}"`;
     document.getElementById('delete-confirm-id').value = routeId;
     document.getElementById('delete-modal').classList.remove('hidden');
-    // Override doDelete button to route-delete mode
     document.querySelector('#delete-modal .btn-danger').onclick = doDeleteRoute;
   }
 
@@ -391,17 +347,16 @@ const ADMIN = (() => {
         headers: _authHeader()
       });
       closeDeleteModal();
-      // Restore original delete button handler
       document.querySelector('#delete-modal .btn-danger').onclick = doDelete;
       TOAST.show('Route deleted.', 'error');
       renderRoutes();
-      renderDashboard();  // refresh stats after route deletion
+      renderDashboard();
     } catch (err) {
       TOAST.show('Could not delete route.', 'error');
     }
   }
 
-  /* ── Add Route modal ── */
+  /* ------------------------------------------------------- ADD ROUTE --------------------------------------------------------------------------------------- */
   let _addRouteStepCount = 0;
 
   function openAddRouteModal() {
@@ -471,7 +426,7 @@ const ADMIN = (() => {
         </div>
         <div class="form-group">
           <label class="form-label">Fare</label>
-          <input class="form-control" name="step-fare" type="text" placeholder="e.g. ₱15–₱20"/>
+          <input class="form-control" name="step-fare" type="text" placeholder="e.g. 15–20" onblur="ADMIN.formatFare(this)"/>
         </div>
       </div>
       <div class="form-group">
@@ -578,7 +533,19 @@ const ADMIN = (() => {
     }
   }
 
-  /* ── Helpers ── */
+  /* ------------------------------------------------------- FARE FORMAT --------------------------------------------------------------------------------------- */
+  function formatFare(input) {
+    let val = input.value.replace(/₱/g, '').trim();
+    if (!val) return;
+    const parts = val.split(/\s*[-–~]\s*/);
+    if (parts.length === 2 && parts[0] && parts[1]) {
+      input.value = `₱${parts[0].trim()}–₱${parts[1].trim()}`;
+    } else {
+      input.value = `₱${val}`;
+    }
+  }
+
+  /* ------------------------------------------------------- HELPERS --------------------------------------------------------------------------------------- */
   function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -594,6 +561,6 @@ const ADMIN = (() => {
     openEditModal, closeEditModal, saveEdit, deleteComment,
     confirmDeleteRoute, doDeleteRoute,
     openAddRouteModal, closeAddRouteModal, autoRouteId,
-    addRouteStep, removeRouteStep, submitNewRoute
+    addRouteStep, removeRouteStep, submitNewRoute, formatFare
   };
 })();

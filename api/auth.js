@@ -1,15 +1,10 @@
-/**
- * api/auth.js — Authentication API Routes
- * Handles signup, login, and session management
- */
-
 const express = require('express');
-const router = express.Router();
-const pool = require('../db');
-const bcrypt = require('bcryptjs');
-const jwt = require('jsonwebtoken');
+const router  = express.Router();
+const pool    = require('../db');
+const bcrypt  = require('bcryptjs');
+const jwt     = require('jsonwebtoken');
 
-// Signup route
+/* ------------------------------------------------------- SIGNUP --------------------------------------------------------------------------------------- */
 router.post('/signup', async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -19,8 +14,7 @@ router.post('/signup', async (req, res) => {
     }
 
     const connection = await pool.getConnection();
-    
-    // Check if user exists
+
     const [existingUser] = await connection.query(
       'SELECT * FROM users WHERE email = ?',
       [email]
@@ -31,10 +25,8 @@ router.post('/signup', async (req, res) => {
       return res.status(409).json({ error: 'Email already registered' });
     }
 
-    // Hash password
     const hashedPassword = await bcrypt.hash(password, 10);
 
-    // Create user
     const [result] = await connection.query(
       'INSERT INTO users (name, email, password, role, status, created_at) VALUES (?, ?, ?, ?, ?, NOW())',
       [name, email, hashedPassword, 'user', 'active']
@@ -66,7 +58,7 @@ router.post('/signup', async (req, res) => {
   }
 });
 
-// Login route
+/* ------------------------------------------------------- LOGIN --------------------------------------------------------------------------------------- */
 router.post('/login', async (req, res) => {
   try {
     const { email, password } = req.body;
@@ -88,7 +80,6 @@ router.post('/login', async (req, res) => {
 
     const user = users[0];
 
-    // Verify password
     const passwordMatch = await bcrypt.compare(password, user.password);
 
     if (!passwordMatch) {
@@ -96,11 +87,6 @@ router.post('/login', async (req, res) => {
       return res.status(401).json({ error: 'Invalid credentials' });
     }
 
-    // Check account status BEFORE issuing a token.
-    // Without this check a restricted user could log in and receive a valid JWT,
-    // bypassing restriction entirely. The verifyToken middleware in api/user.js
-    // blocks restricted users from subsequent API calls, but that is too late —
-    // the token is already in their hands.
     if (user.status === 'restricted') {
       connection.release();
       return res.status(403).json({
@@ -108,7 +94,6 @@ router.post('/login', async (req, res) => {
       });
     }
 
-    // Create JWT token
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,
@@ -121,10 +106,10 @@ router.post('/login', async (req, res) => {
       message: 'Login successful',
       token,
       user: {
-        id: user.id,
-        name: user.name,
+        id:    user.id,
+        name:  user.name,
         email: user.email,
-        role: user.role
+        role:  user.role
       }
     });
   } catch (error) {

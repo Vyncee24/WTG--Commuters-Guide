@@ -61,8 +61,7 @@
     document.getElementById('nav-links').appendChild(logoutBtn);
   }
 
-  // --- Autocomplete: await the MySQL API call ---
-  // CHANGED: was synchronous `ROUTES.getAllLocations()`.  Now awaited.
+  /* ------------------------------------------------------- AUTOCOMPLETE --------------------------------------------------------------------------------------- */
   (async () => {
     try {
       const locs = await ROUTES.getAllLocations();
@@ -79,7 +78,7 @@
 
   let currentRoute = null;
 
-  /* ── Load the result from MySQL via the smart-search API ── */
+  /* ------------------------------------------------------- LOAD RESULT --------------------------------------------------------------------------------------- */
   async function loadResult() {
     const raw = sessionStorage.getItem('wtg_search');
     if (!raw) { window.location.href = 'index.html'; return; }
@@ -91,8 +90,6 @@
     const resultArea = document.getElementById('result-area');
     resultArea.innerHTML = `<div class="loading"><div class="spinner"></div> Finding best route...</div>`;
 
-    // --- CHANGED: was setTimeout + synchronous ROUTES.findRoute() ---
-    // Now awaits the MySQL API (no arbitrary 600 ms delay needed).
     let results = [];
     try {
       results = await ROUTES.findRoute(from, to);
@@ -122,9 +119,6 @@
     resultArea.innerHTML = ROUTES.renderRoute(currentRoute);
     resultArea.classList.add('fade-in');
 
-    // Show action bar
-    // FIX: was actionBar.style.display = 'flex' — but .hidden uses display:none !important
-    // which overrides any inline style. Must remove the class instead.
     const actionBar = document.getElementById('action-bar');
     actionBar.classList.remove('hidden');
     updateSaveBtn();
@@ -133,6 +127,7 @@
     USER.renderComments(currentRoute.id, 'comments-wrap');
   }
 
+  /* ------------------------------------------------------- SEARCH AGAIN --------------------------------------------------------------------------------------- */
   function searchAgain() {
     const from = document.getElementById('from-input').value.trim();
     const to   = document.getElementById('to-input').value.trim();
@@ -141,6 +136,7 @@
     loadResult();
   }
 
+  /* ------------------------------------------------------- SAVE TOGGLE --------------------------------------------------------------------------------------- */
   async function toggleSave() {
     if (!session) { TOAST.show('Please log in to save routes.', 'error'); return; }
     if (!currentRoute) return;

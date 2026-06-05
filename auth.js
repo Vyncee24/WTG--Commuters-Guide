@@ -1,74 +1,48 @@
-/**
- * auth.js — Authentication module for WTG: Commuters Guide
- * Handles login, signup, session, and role management using MySQL Backend API
- *
- * FIX APPLIED:
- *  - API_URL is now derived from window.location instead of being hardcoded
- *    to 'http://localhost:5000/api'. The hardcoded URL caused ALL API calls
- *    (including dashboard stats) to fail with a network error when:
- *      a) The server ran on a port other than 5000
- *      b) The site was accessed from a network IP (e.g. 192.168.x.x)
- *      c) The app was deployed to any non-localhost environment
- *    Since server.js serves both static files and the API on the same port,
- *    using window.location.origin + '/api' always resolves correctly.
- *
- *    Fallback: if the page is somehow opened as file:// (not via Express),
- *    the code defaults to localhost:5000 to preserve existing dev behaviour.
- */
-
-// FIX: Derive API_URL from the current page origin so it works on any host/port.
-// server.js serves static files AND API routes on the same port, so this is safe.
 const API_URL = (window.location.protocol === 'file:')
-  ? 'http://localhost:5000/api'                    // fallback for direct file:// access
-  : `${window.location.origin}/api`;               // correct for Express-served pages
+  ? 'http://localhost:5000/api'
+  : `${window.location.origin}/api`;
 
 const TOKEN_KEY   = 'wtg_token';
 const SESSION_KEY = 'wtg_session';
 
 const AUTH = (() => {
 
-  /* ── Initialize session from stored token ── */
+  /* ------------------------------------------------------- SESSION INIT --------------------------------------------------------------------------------------- */
   function init() {
     const token = getToken();
     if (token) {
-      // Token exists; refresh the session from the server in the background.
       loadUserSession();
     }
   }
 
-  /* ── Get stored JWT token ── */
+  /* ------------------------------------------------------- TOKEN MANAGEMENT --------------------------------------------------------------------------------------- */
   function getToken() {
     return localStorage.getItem(TOKEN_KEY);
   }
 
-  /* ── Store JWT token ── */
   function setToken(token) {
     localStorage.setItem(TOKEN_KEY, token);
   }
 
-  /* ── Clear JWT token ── */
   function clearToken() {
     localStorage.removeItem(TOKEN_KEY);
   }
 
-  /* ── Get current session (from localStorage cache) ── */
+  /* ------------------------------------------------------- SESSION MANAGEMENT --------------------------------------------------------------------------------------- */
   function getSession() {
     const s = localStorage.getItem(SESSION_KEY);
     return s ? JSON.parse(s) : null;
   }
 
-  /* ── Store session locally ── */
   function setSession(user) {
     const safe = { id: user.id, name: user.name, email: user.email, role: user.role };
     localStorage.setItem(SESSION_KEY, JSON.stringify(safe));
   }
 
-  /* ── Clear session ── */
   function clearSession() {
     localStorage.removeItem(SESSION_KEY);
   }
 
-  /* ── Load user session from API ── */
   async function loadUserSession() {
     const token = getToken();
     if (!token) return null;
@@ -93,7 +67,7 @@ const AUTH = (() => {
     }
   }
 
-  /* ── Login with API ── */
+  /* ------------------------------------------------------- LOGIN --------------------------------------------------------------------------------------- */
   async function login(email, password) {
     try {
       if (!email.trim() || !password.trim()) {
@@ -122,7 +96,7 @@ const AUTH = (() => {
     }
   }
 
-  /* ── Signup with API ── */
+  /* ------------------------------------------------------- SIGNUP --------------------------------------------------------------------------------------- */
   async function signup(name, email, password) {
     try {
       if (!name.trim() || !email.trim() || !password.trim()) {
@@ -157,14 +131,14 @@ const AUTH = (() => {
     }
   }
 
-  /* ── Logout ── */
+  /* ------------------------------------------------------- LOGOUT --------------------------------------------------------------------------------------- */
   function logout() {
     clearToken();
     clearSession();
     window.location.href = 'login.html';
   }
 
-  /* ── Guard: redirect if not logged in ── */
+  /* ------------------------------------------------------- GUARDS --------------------------------------------------------------------------------------- */
   function requireAuth(redirectTo = 'login.html') {
     const token = getToken();
     const session = getSession();
@@ -175,7 +149,6 @@ const AUTH = (() => {
     return session;
   }
 
-  /* ── Guard: redirect if not admin ── */
   function requireAdmin() {
     const token = getToken();
     const session = getSession();
@@ -186,7 +159,6 @@ const AUTH = (() => {
     return session;
   }
 
-  /* ── Get current user from session ── */
   function getCurrentUser() {
     return getSession();
   }

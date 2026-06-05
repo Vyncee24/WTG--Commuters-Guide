@@ -1,16 +1,5 @@
-/**
- * routes.js — Client-side route lookup module for WTG: Commuters Guide
- *
- * FIX APPLIED:
- *  - API_BASE was hardcoded to 'http://localhost:5000/api/routes'.
- *    Changed to use window.location.origin so it works on any host/port,
- *    matching the same fix applied to auth.js.
- */
-
 const ROUTES = (() => {
 
-  // FIX: Use window.location.origin instead of hardcoded localhost:5000.
-  // API_URL (from auth.js) is already fixed; mirror the same logic here.
   const API_BASE = (window.location.protocol === 'file:')
     ? 'http://localhost:5000/api/routes'
     : `${window.location.origin}/api/routes`;
@@ -26,6 +15,7 @@ const ROUTES = (() => {
     fx: 'transport-jeep', uv: 'transport-jeep'
   };
 
+  /* ------------------------------------------------------- ROUTE LOOKUP --------------------------------------------------------------------------------------- */
   async function findRoute(from, to) {
     if (!from.trim() || !to.trim()) return [];
     try {
@@ -86,6 +76,7 @@ const ROUTES = (() => {
     }
   }
 
+  /* ------------------------------------------------------- STEP RENDER --------------------------------------------------------------------------------------- */
   function renderStepMap(step) {
     if (step.mapEmbed && step.mapEmbed.startsWith('https://www.google.com/maps/embed')) {
       return `
@@ -155,6 +146,7 @@ const ROUTES = (() => {
       </div>`;
   }
 
+  /* ------------------------------------------------------- ROUTE RENDER --------------------------------------------------------------------------------------- */
   function renderMapEmbed(mapEmbedUrl) {
     if (!mapEmbedUrl) return '';
     const safeUrl = mapEmbedUrl.startsWith('https://www.google.com/maps/embed')

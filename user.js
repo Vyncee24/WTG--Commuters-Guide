@@ -1,27 +1,6 @@
-/**
- * user.js — User data module for WTG: Commuters Guide
- * Handles saved routes, history, and comments (comments via MySQL API).
- *
- * FIXES APPLIED:
- *  - BUG FIX 1 (Main comment bug): getComments() and addComment() now
- *    strip the '_rev' suffix from route IDs before hitting the API.
- *    Previously, a reversed route search produced a route_id like
- *    'cvsu-ccat_sm-tanza_rev'. Comments posted on that page were stored
- *    in the DB under the '_rev' key, but subsequent fetches (forward
- *    direction) used 'cvsu-ccat_sm-tanza' — so comments appeared lost.
- *    The server-side POST/GET handlers also strip '_rev' (defence in depth),
- *    but stripping on the client side makes the behaviour explicit.
- *
- *  - BUG FIX 2: deleteComment now passes the commentId as a number,
- *    not as part of a routeId string, matching the backend route
- *    DELETE /api/user/comments/:commentId.
- */
-
-// API_URL is declared in auth.js — reusing it here
-
 const USER = (() => {
 
-  /* ── Get auth token ── */
+  /* ------------------------------------------------------- AUTH HEADER --------------------------------------------------------------------------------------- */
   function _getToken() {
     return AUTH.getToken();
   }
@@ -30,16 +9,11 @@ const USER = (() => {
     return { 'Authorization': `Bearer ${_getToken()}`, 'Content-Type': 'application/json' };
   }
 
-  /**
-   * FIX 1 helper: strip the '_rev' suffix that the smart-search API appends
-   * to reversed routes.  Comments must always be stored under the canonical
-   * (non-reversed) route_id so they are visible regardless of travel direction.
-   */
   function _canonicalId(routeId) {
     return String(routeId).replace(/_rev$/, '');
   }
 
-  /* ── Save a route via API ── */
+  /* ------------------------------------------------------- SAVE ROUTE --------------------------------------------------------------------------------------- */
   async function saveRoute(routeId, from, to) {
     const token = _getToken();
     if (!token) { alert('Please log in to save routes'); return false; }
@@ -62,7 +36,7 @@ const USER = (() => {
     }
   }
 
-  /* ── Remove saved route via API ── */
+  /* ------------------------------------------------------- UNSAVE ROUTE --------------------------------------------------------------------------------------- */
   async function unsaveRoute(routeId) {
     if (!_getToken()) return false;
     try {
@@ -77,7 +51,7 @@ const USER = (() => {
     }
   }
 
-  /* ── Check if route is saved via API ── */
+  /* ------------------------------------------------------- CHECK SAVED --------------------------------------------------------------------------------------- */
   async function isRouteSaved(routeId) {
     if (!_getToken()) return false;
     try {
@@ -90,7 +64,7 @@ const USER = (() => {
     }
   }
 
-  /* ── Get saved routes via API ── */
+  /* ------------------------------------------------------- GET SAVED ROUTES --------------------------------------------------------------------------------------- */
   async function getSavedRoutes() {
     if (!_getToken()) return [];
     try {
@@ -102,7 +76,7 @@ const USER = (() => {
     }
   }
 
-  /* ── Search history: kept in localStorage (per-device, no login required) ── */
+  /* ------------------------------------------------------- SEARCH HISTORY --------------------------------------------------------------------------------------- */
   function addHistory(routeId, from, to) {
     const history  = JSON.parse(localStorage.getItem('wtg_search_history') || '[]');
     const filtered = history.filter(h => h.routeId !== routeId);
@@ -118,11 +92,8 @@ const USER = (() => {
     localStorage.removeItem('wtg_search_history');
   }
 
-  /* ── Comments: fetched from and saved to MySQL API ── */
-
-  /* Fetch comments for a route */
+  /* ------------------------------------------------------- COMMENTS --------------------------------------------------------------------------------------- */
   async function getComments(routeId) {
-    // FIX 1: Always use the canonical (non-reversed) route ID.
     const id = _canonicalId(routeId);
     try {
       const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(id)}`);
@@ -133,11 +104,9 @@ const USER = (() => {
     }
   }
 
-  /* Post a comment */
   async function addComment(routeId, text) {
     if (!_getToken()) return false;
     if (!text.trim()) return false;
-    // FIX 1: Always use the canonical (non-reversed) route ID.
     const id = _canonicalId(routeId);
     try {
       const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(id)}`, {
@@ -157,7 +126,6 @@ const USER = (() => {
     }
   }
 
-  /* Delete a comment */
   async function deleteComment(routeId, commentId) {
     if (!_getToken()) return false;
     try {
@@ -171,14 +139,13 @@ const USER = (() => {
     }
   }
 
-  /* ── Render comment section (async, fetches from API) ── */
+  /* ------------------------------------------------------- RENDER COMMENTS --------------------------------------------------------------------------------------- */
   async function renderComments(routeId, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
 
     const session = AUTH.getSession();
 
-    // Show loading state
     container.innerHTML = `
       <h3>💬 Community Tips &amp; Alternate Routes</h3>
       <p class="text-sm mt-8 mb-16">Know a better route? Share it with fellow commuters!</p>
@@ -226,7 +193,7 @@ const USER = (() => {
     `;
   }
 
-  /* ── Submit comment form ── */
+  /* ------------------------------------------------------- SUBMIT / REMOVE COMMENT --------------------------------------------------------------------------------------- */
   async function submitComment(routeId, containerId) {
     const input = document.getElementById('comment-input');
     if (!input || !input.value.trim()) {
@@ -242,7 +209,6 @@ const USER = (() => {
     }
   }
 
-  /* ── Remove comment ── */
   async function removeComment(routeId, commentId, containerId) {
     const ok = await deleteComment(routeId, commentId);
     if (ok) {
@@ -253,7 +219,7 @@ const USER = (() => {
     }
   }
 
-  /* ── Helpers ── */
+  /* ------------------------------------------------------- HELPERS --------------------------------------------------------------------------------------- */
   function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
@@ -276,7 +242,7 @@ const USER = (() => {
   };
 })();
 
-/* ── Global toast utility ── */
+/* ------------------------------------------------------- TOAST --------------------------------------------------------------------------------------- */
 const TOAST = (() => {
   function show(msg, type = '') {
     let container = document.getElementById('toast-container');
