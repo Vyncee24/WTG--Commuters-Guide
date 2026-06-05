@@ -31,7 +31,8 @@ router.get('/stats', verifyAdmin, async (req, res) => {
     const [[{ active }]]     = await pool.query(`SELECT COUNT(*) AS active FROM users WHERE role != 'admin' AND status = 'active'`);
     const [[{ restricted }]] = await pool.query(`SELECT COUNT(*) AS restricted FROM users WHERE role != 'admin' AND status = 'restricted'`);
     const [[{ comments }]]   = await pool.query('SELECT COUNT(*) AS comments FROM comments');
-    res.json({ total, active, restricted, comments });
+    const [[{ routes }]]     = await pool.query('SELECT COUNT(*) AS routes FROM routes');
+    res.json({ total, active, restricted, comments, routes });
   } catch (err) {
     console.error('Admin stats error:', err);
     res.status(500).json({ error: 'Server error fetching stats' });

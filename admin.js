@@ -207,6 +207,7 @@ const ADMIN = (() => {
           <td>${escHtml(r.duration || '—')} · ${escHtml(r.fare || '—')}</td>
           <td>
             <div class="user-actions">
+              <button class="btn btn-sm btn-secondary" onclick="ADMIN.openEditRouteModal('${escHtml(r.route_id)}')">Edit</button>
               <button class="btn btn-sm btn-danger" onclick="ADMIN.confirmDeleteRoute('${r.route_id}','${escHtml(r.from_location)}','${escHtml(r.to_location)}')">Delete</button>
             </div>
           </td>
@@ -533,6 +534,186 @@ const ADMIN = (() => {
     }
   }
 
+  /* ------------------------------------------------------- EDIT ROUTE --------------------------------------------------------------------------------------- */
+  let _editingRouteId = null;
+
+  async function openEditRouteModal(routeId) {
+    _editingRouteId = routeId;
+
+    document.getElementById('er-route-id').value     = routeId;
+    document.getElementById('er-from').value          = '';
+    document.getElementById('er-to').value            = '';
+    document.getElementById('er-duration').value      = '';
+    document.getElementById('er-fare').value          = '';
+    document.getElementById('er-transport').value     = 'jeep';
+    document.getElementById('er-tags').value          = '';
+    document.getElementById('er-map-embed-url').value = '';
+    document.getElementById('er-steps-list').innerHTML = '';
+    const hint = document.getElementById('er-no-steps-hint');
+    if (hint) hint.style.display = 'none';
+
+    document.getElementById('edit-route-modal').classList.remove('hidden');
+
+    try {
+      const res = await fetch(`${API_URL}/routes/${encodeURIComponent(routeId)}`);
+      if (!res.ok) { TOAST.show('Could not load route data.', 'error'); return; }
+      const route = await res.json();
+
+      document.getElementById('er-from').value          = route.from_location  || '';
+      document.getElementById('er-to').value            = route.to_location    || '';
+      document.getElementById('er-duration').value      = route.duration       || '';
+      document.getElementById('er-fare').value          = route.fare           || '';
+      document.getElementById('er-transport').value     = route.transport_type || 'jeep';
+      document.getElementById('er-tags').value          = (route.tags || []).join(', ');
+      document.getElementById('er-map-embed-url').value = route.map_embed_url  || '';
+
+      const steps = route.steps || [];
+      steps.forEach(s => addEditRouteStep(s));
+      if (hint) hint.style.display = steps.length === 0 ? '' : 'none';
+    } catch (err) {
+      TOAST.show('Could not load route data.', 'error');
+    }
+  }
+
+  function closeEditRouteModal() {
+    document.getElementById('edit-route-modal').classList.add('hidden');
+    _editingRouteId = null;
+  }
+
+  function addEditRouteStep(stepData = {}) {
+    const list = document.getElementById('er-steps-list');
+    const hint = document.getElementById('er-no-steps-hint');
+    if (hint) hint.style.display = 'none';
+
+    const n   = list.children.length + 1;
+    const div = document.createElement('div');
+    div.className = 'ar-step-block';
+    div.style.cssText = 'border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:12px;';
+    div.innerHTML = `
+      <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px;">
+        <span style="font-weight:600;font-size:13px;">Step ${n}</span>
+        <button type="button" class="btn btn-sm btn-ghost" onclick="ADMIN.removeEditRouteStep(this)" style="color:var(--red);">✕ Remove</button>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Title <span style="color:var(--red);">*</span></label>
+        <input class="form-control" name="step-title" type="text" placeholder="e.g. Ride a Jeepney from CVSU CCAT" value="${escHtml(stepData.title || '')}"/>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label class="form-label">Transport <span style="color:var(--red);">*</span></label>
+          <select class="form-control" name="step-transport">
+            ${['jeep','bus','tricycle','walk','fx','uv'].map(t =>
+              `<option value="${t}" ${(stepData.transport||'').toLowerCase()===t?'selected':''}>${t.charAt(0).toUpperCase()+t.slice(1)}</option>`
+            ).join('')}
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Fare</label>
+          <input class="form-control" name="step-fare" type="text" placeholder="e.g. 15–20" value="${escHtml(stepData.fare || '')}" onblur="ADMIN.formatFare(this)"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Instruction <span style="color:var(--red);">*</span></label>
+        <textarea class="form-control" name="step-instruction" rows="2" placeholder="Describe what to do on this step…">${escHtml(stepData.instruction || '')}</textarea>
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
+        <div class="form-group">
+          <label class="form-label">Signboard <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input class="form-control" name="step-signboard" type="text" placeholder='e.g. Look for: "Tanza"' value="${escHtml(stepData.signboard || '')}"/>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Alight At <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+          <input class="form-control" name="step-alight" type="text" placeholder="e.g. SM Tanza Terminal" value="${escHtml(stepData.alightAt || '')}"/>
+        </div>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Google Maps Embed URL <span style="color:var(--text3);font-weight:400;">(optional)</span></label>
+        <input class="form-control" name="step-map-embed" type="url" placeholder="https://www.google.com/maps/embed?pb=..." value="${escHtml(stepData.mapEmbed || '')}"/>
+        <p style="font-size:12px;color:var(--text3);margin-top:4px;">Google Maps → <strong>Share → Embed a map</strong> → copy the URL inside <code>src="..."</code>.</p>
+      </div>`;
+    list.appendChild(div);
+  }
+
+  function removeEditRouteStep(btn) {
+    btn.closest('.ar-step-block').remove();
+    const list = document.getElementById('er-steps-list');
+    const hint = document.getElementById('er-no-steps-hint');
+    if (hint) hint.style.display = list.children.length === 0 ? '' : 'none';
+  }
+
+  async function submitEditRoute() {
+    if (!_editingRouteId) return;
+
+    const fromLocation  = document.getElementById('er-from').value.trim();
+    const toLocation    = document.getElementById('er-to').value.trim();
+    const duration      = document.getElementById('er-duration').value.trim();
+    const fare          = document.getElementById('er-fare').value.trim();
+    const transportType = document.getElementById('er-transport').value;
+    const tagsRaw       = document.getElementById('er-tags').value.trim();
+    const mapEmbedUrl   = document.getElementById('er-map-embed-url').value.trim();
+
+    if (!fromLocation) { TOAST.show('From location is required.', 'error'); return; }
+    if (!toLocation)   { TOAST.show('To location is required.', 'error'); return; }
+
+    const tags       = tagsRaw ? tagsRaw.split(',').map(t => t.trim()).filter(Boolean) : [];
+    const stepBlocks = document.querySelectorAll('#er-steps-list .ar-step-block');
+    const steps      = [];
+    let   stepNum    = 1;
+
+    for (const block of stepBlocks) {
+      const title       = block.querySelector('[name="step-title"]').value.trim();
+      const transport   = block.querySelector('[name="step-transport"]').value;
+      const instruction = block.querySelector('[name="step-instruction"]').value.trim();
+      const signboard   = block.querySelector('[name="step-signboard"]').value.trim();
+      const alightAt    = block.querySelector('[name="step-alight"]').value.trim();
+      const stepFare    = block.querySelector('[name="step-fare"]').value.trim();
+      const mapEmbed    = block.querySelector('[name="step-map-embed"]').value.trim();
+
+      if (!title || !instruction) {
+        TOAST.show(`Step ${stepNum}: Title and Instruction are required.`, 'error');
+        return;
+      }
+      steps.push({
+        num:       stepNum++,
+        title,
+        transport,
+        instruction,
+        signboard: signboard || null,
+        alightAt:  alightAt  || null,
+        fare:      stepFare  || null,
+        mapEmbed:  mapEmbed  || null
+      });
+    }
+
+    try {
+      const res = await fetch(`${API_URL}/routes/${encodeURIComponent(_editingRouteId)}`, {
+        method:  'PUT',
+        headers: _authHeader(),
+        body:    JSON.stringify({
+          from_location:  fromLocation,
+          to_location:    toLocation,
+          duration:       duration      || null,
+          fare:           fare          || null,
+          transport_type: transportType || null,
+          tags,
+          steps,
+          map_embed_url:  mapEmbedUrl   || null
+        })
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        TOAST.show(data.error || 'Failed to update route.', 'error');
+        return;
+      }
+      closeEditRouteModal();
+      TOAST.show('Route updated successfully! ✓', 'success');
+      renderRoutes();
+      renderDashboard();
+    } catch (err) {
+      TOAST.show('Could not update route. Is the server running?', 'error');
+    }
+  }
+
   /* ------------------------------------------------------- FARE FORMAT --------------------------------------------------------------------------------------- */
   function formatFare(input) {
     let val = input.value.replace(/₱/g, '').trim();
@@ -561,6 +742,8 @@ const ADMIN = (() => {
     openEditModal, closeEditModal, saveEdit, deleteComment,
     confirmDeleteRoute, doDeleteRoute,
     openAddRouteModal, closeAddRouteModal, autoRouteId,
-    addRouteStep, removeRouteStep, submitNewRoute, formatFare
+    addRouteStep, removeRouteStep, submitNewRoute, formatFare,
+    openEditRouteModal, closeEditRouteModal,
+    addEditRouteStep, removeEditRouteStep, submitEditRoute
   };
 })();
