@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Search History — WTG</title>
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body>
+
+<nav class="nav">
+  <div class="nav-inner">
+    <a href="index.html" class="nav-logo"><img src="visuals/WTGLOGO.png" alt="" width="150"/></a>
+    <div class="nav-links">
+      <a href="index.html">Home</a>
+      <a href="profile.html">Profile</a>
+      <span id="nav-user" style="color:var(--text2);font-size:14px;"></span>
+    </div>
+  </div>
+</nav>
+
+<div class="container" style="max-width:700px;margin:40px auto;padding:0 16px;">
+
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:24px;flex-wrap:wrap;gap:12px;">
+    <div>
+      <h2 style="margin:0;">Search History</h2>
+      <p class="text-sm" style="color:var(--text3);margin-top:4px;">Routes you have searched — stored in the database</p>
+    </div>
+    <button class="btn btn-danger" id="clear-all-btn" onclick="HISTORY_PAGE.clearAll()" style="display:none;">
+      Clear All
+    </button>
+  </div>
+
+  <div id="history-list">
+    <div class="empty-state">
+      <div class="empty-icon">⏳</div>
+      <p>Loading history…</p>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast-container"></div>
+
+<script src="auth.js"></script>
+<script>
+/* ── require login ── */
+AUTH.requireLogin();
+
+/* ── Helpers ── */
+function escHtml(s) {
+  return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+function formatDate(ts) {
+  if (!ts) return '—';
+  return new Date(ts).toLocaleString('en-PH', { dateStyle:'medium', timeStyle:'short' });
+}
+
+const API_URL = (window.location.protocol === 'file:')
+  ? 'http://localhost:5000/api'
+  : `${window.location.origin}/api`;
+
+const HISTORY_PAGE = (() => {
+
+  function authHeader() {
+    return { 'Authorization': `Bearer ${AUTH.getToken()}`, 'Content-Type': 'application/json' };
+  }
+
+  async function load() {
+    const list = document.getElementById('history-list');
+    list.innerHTML = '<div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>';
+
+    try {
+      const res = await fetch(`${API_URL}/history`, { headers: authHeader() });
+      if (res.status === 401 || res.status === 403) {
+        AUTH.logout();
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const rows = await res.json();
+
+      const clearBtn = document.getElementById('clear-all-btn');
+      if (clearBtn) clearBtn.style.display = rows.length ? '' : 'none';
+
+      if (!rows.length) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <p>No search history yet.<br/>Start searching for routes on the <a href="index.html">home page</a>.</p>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = rows.map(r => `
+        <div class="card" style="margin-bottom:12px;display:flex;align-items:center;gap:16px;padding:16px 20px;" id="hist-${r.id}">
+          <div style="flex:1;min-width:0;">
+            <div style="font-weight:600;font-size:15px;color:var(--text);">
+              ${escHtml(r.origin)} <span style="color:var(--text3);">→</span> ${escHtml(r.destination)}
+            </div>
+            <div style="font-size:12px;color:var(--text3);margin-top:4px;">
+              ${formatDate(r.searched_at)}
+              ${r.route_id ? `· <span style="font-family:monospace;">${escHtml(r.route_id)}</span>` : ''}
+            </div>
+          </div>
+          <div style="display:flex;gap:8px;flex-shrink:0;">
+            <a href="result.html?route=${encodeURIComponent(r.route_id || '')}&from=${encodeURIComponent(r.origin)}&to=${encodeURIComponent(r.destination)}"
+               class="btn btn-sm btn-secondary">View Route</a>
+            <button class="btn btn-sm btn-danger" onclick="HISTORY_PAGE.deleteEntry(${r.id})">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    } catch (err) {
+      console.error('History load error:', err);
+      list.innerHTML = `
+        <div class="empty-state">
+          <div class="empty-icon">⚠️</div>
+          <p>Could not load history. Is the server running?</p>
+        </div>`;
+    }
+  }
+
+  async function deleteEntry(id) {
+    try {
+      const res = await fetch(`${API_URL}/history/${id}`, {
+        method: 'DELETE',
+        headers: authHeader()
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      const el = document.getElementById(`hist-${id}`);
+      if (el) el.remove();
+
+      const remaining = document.querySelectorAll('[id^="hist-"]');
+      if (!remaining.length) {
+        document.getElementById('clear-all-btn').style.display = 'none';
+        document.getElementById('history-list').innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🔍</div>
+            <p>No search history yet.</p>
+          </div>`;
+      }
+      TOAST.show('Entry deleted.');
+    } catch (err) {
+      TOAST.show('Could not delete entry.', 'error');
+    }
+  }
+
+  async function clearAll() {
+    if (!confirm('Clear your entire search history? This cannot be undone.')) return;
+    try {
+      const res = await fetch(`${API_URL}/history`, {
+        method: 'DELETE',
+        headers: authHeader()
+      });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+      TOAST.show('History cleared.');
+      load();
+    } catch (err) {
+      TOAST.show('Could not clear history.', 'error');
+    }
+  }
+
+  return { load, deleteEntry, clearAll };
+})();
+
+/* ── Show logged-in user name ── */
+const user = AUTH.getUser();
+if (user) {
+  const el = document.getElementById('nav-user');
+  if (el) el.textContent = user.name;
+}
+
+/* ── Boot ── */
+HISTORY_PAGE.load();
+</script>
+
+<!-- Minimal toast implementation (matches existing style) -->
+<script>
+const TOAST = (() => {
+  function show(msg, type) {
+    const c = document.getElementById('toast-container');
+    if (!c) return;
+    const t = document.createElement('div');
+    t.className = 'toast' + (type === 'error' ? ' toast-error' : type === 'success' ? ' toast-success' : '');
+    t.textContent = msg;
+    c.appendChild(t);
+    setTimeout(() => t.remove(), 3000);
+  }
+  return { show };
+})();
+</script>
+</body>
+</html>

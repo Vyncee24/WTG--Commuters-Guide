@@ -22,9 +22,12 @@
 
 <!-- Hero -->
 <section class="hero">
-  <div class="hero-tag">Where To Go: Commuters Guide</div>
-  <h1>Commute Effortless,<br/>Commute with Confidence</h1>
-  <p>Input where do you want to go.</p>
+  <div style="max-width: 420px; width: 100%; margin: 0 auto 8px; background: transparent;">
+    <video autoplay muted loop playsinline
+      class="logo-video">
+      <source src="visuals/logo_animation.mp4" type="video/mp4">
+    </video>
+  </div>
 
   <!-- Search Box -->
   <div class="search-box">
@@ -62,7 +65,7 @@
 <script src="user.js"></script>
 <script src="routes.js"></script>
 <script>
-  /* ── Nav setup ── */
+  /* ------------------------------------------------------- NAV SETUP --------------------------------------------------------------------------------------- */
   const session = AUTH.getSession();
   if (session) {
     const authLink = document.getElementById('nav-auth');
@@ -75,12 +78,10 @@
     document.getElementById('nav-links').appendChild(logoutBtn);
   }
 
-  /* ── Page init: load autocomplete + popular routes from MySQL API ── */
+  /* ------------------------------------------------------- PAGE INIT --------------------------------------------------------------------------------------- */
   async function initPage() {
 
-    // --- Autocomplete: fetch location list from MySQL via API ---
-    // CHANGED: was synchronous `ROUTES.getAllLocations()` (returned from
-    // hard-coded ROUTE_DB).  Now awaits the API call to MySQL.
+    // Autocomplete: fetch location list from API
     try {
       const locs = await ROUTES.getAllLocations();
       const dl = document.getElementById('location-list');
@@ -93,8 +94,7 @@
       console.warn('Could not load location autocomplete:', e);
     }
 
-    // --- Popular routes: fetch from MySQL via API ---
-    // CHANGED: was synchronous `ROUTES.getPopular()`.  Now awaited.
+    // Popular routes: fetch from API
     const grid = document.getElementById('popular-grid');
     try {
       const popular = await ROUTES.getPopular();
@@ -128,7 +128,7 @@
     findRoute();
   }
 
-  /* ── Route finder: saves params then goes to result.html ── */
+  /* ------------------------------------------------------- ROUTE FINDER --------------------------------------------------------------------------------------- */
   function findRoute() {
     const from = document.getElementById('from-input').value.trim();
     const to   = document.getElementById('to-input').value.trim();

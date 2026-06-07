@@ -28,7 +28,7 @@ function parseSteps(row) {
   return row;
 }
 
-/* ── Admin-only middleware ── */
+/* ------------------------------------------------------- ADMIN-ONLY MIDDLEWARE --------------------------------------------------------------------------------------- */
 function verifyAdmin(req, res, next) {
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -42,6 +42,20 @@ function verifyAdmin(req, res, next) {
   }
 }
 
+/* ------------------------------------------------------- OPTIONAL USER MIDDLEWARE --------------------------------------------------------------------------------------- */
+function optionalUser(req, res, next) {
+  const header = req.headers.authorization || '';
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
+  if (token) {
+    try {
+      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+      req.userId = decoded.id;
+    } catch (_) {}
+  }
+  next();
+}
+
+/* ------------------------------------------------------- GET /API/ROUTES --------------------------------------------------------------------------------------- */
 router.get('/', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM routes ORDER BY id');
@@ -52,6 +66,7 @@ router.get('/', async (req, res) => {
   }
 });
 
+/* ------------------------------------------------------- GET /API/ROUTES/SEARCH --------------------------------------------------------------------------------------- */
 router.get('/search', async (req, res) => {
   try {
     const { from, to } = req.query;
@@ -69,12 +84,14 @@ router.get('/search', async (req, res) => {
   }
 });
 
-router.get('/search/smart', async (req, res) => {
+/* ------------------------------------------------------- GET /API/ROUTES/SEARCH/SMART --------------------------------------------------------------------------------------- */
+router.get('/search/smart', optionalUser, async (req, res) => {
   try {
     const { from, to } = req.query;
     if (!from || !to) {
       return res.status(400).json({ error: 'Please provide both from and to query parameters.' });
     }
+
     const [rows] = await pool.query('SELECT * FROM routes ORDER BY id');
     const routes = rows.map(parseSteps);
 
@@ -91,6 +108,39 @@ router.get('/search/smart', async (req, res) => {
 
     if (bestScore < 25 || !best) return res.json([]);
 
+    /* ------------------------------------------------------- OLTP TRANSACTION --------------------------------------------------------------------------------------- */
+    const conn = await pool.getConnection();
+    try {
+      await conn.beginTransaction();
+
+      /* Step 1: Insert into search_history */
+      const canonicalRouteId = best.route_id;
+      const origin      = reversed ? best.to_location   : best.from_location;
+      const destination = reversed ? best.from_location : best.to_location;
+
+      await conn.query(
+        `INSERT INTO search_history (user_id, route_id, origin, destination, searched_at)
+         VALUES (?, ?, ?, ?, NOW())`,
+        [req.userId || null, canonicalRouteId, origin, destination]
+      );
+
+      /* Step 2: Increment route search_count */
+      await conn.query(
+        'UPDATE routes SET search_count = search_count + 1 WHERE id = ?',
+        [best.id]
+      );
+
+      /* Commit */
+      await conn.commit();
+    } catch (txErr) {
+      /* Rollback on any failure — search still returns results */
+      await conn.rollback();
+      console.error('[search/smart] Transaction rollback:', txErr.message);
+    } finally {
+      conn.release();
+    }
+
+    /* Build result */
     if (reversed) {
       best = {
         ...best,
@@ -108,15 +158,19 @@ router.get('/search/smart', async (req, res) => {
   }
 });
 
+/* ------------------------------------------------------- GET /API/ROUTES/POPULAR --------------------------------------------------------------------------------------- */
 router.get('/popular', async (req, res) => {
   try {
-    const [rows] = await pool.query('SELECT * FROM routes ORDER BY id LIMIT 4');
+    const [rows] = await pool.query(
+      'SELECT * FROM routes ORDER BY search_count DESC, id ASC LIMIT 4'
+    );
     res.json(rows.map(parseSteps));
   } catch (err) {
     res.status(500).json({ error: 'Server error fetching popular routes' });
   }
 });
 
+/* ------------------------------------------------------- GET /API/ROUTES/LOCATIONS --------------------------------------------------------------------------------------- */
 router.get('/locations', async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -128,6 +182,7 @@ router.get('/locations', async (req, res) => {
   }
 });
 
+/* ------------------------------------------------------- GET /API/ROUTES/:ROUTEID --------------------------------------------------------------------------------------- */
 router.get('/:routeId', async (req, res) => {
   try {
     const [rows] = await pool.query('SELECT * FROM routes WHERE route_id = ?', [req.params.routeId]);
@@ -138,6 +193,7 @@ router.get('/:routeId', async (req, res) => {
   }
 });
 
+/* ------------------------------------------------------- POST /API/ROUTES --------------------------------------------------------------------------------------- */
 router.post('/', verifyAdmin, async (req, res) => {
   try {
     const { route_id, from_location, to_location, duration, fare, transport_type, tags = [], steps = [], map_embed_url } = req.body;
@@ -155,7 +211,7 @@ router.post('/', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── PUT /api/routes/:routeId — admin update route ── */
+/* ------------------------------------------------------- PUT /API/ROUTES/:ROUTEID --------------------------------------------------------------------------------------- */
 router.put('/:routeId', verifyAdmin, async (req, res) => {
   try {
     const { from_location, to_location, duration, fare, transport_type, tags, steps, map_embed_url } = req.body;
@@ -184,7 +240,7 @@ router.put('/:routeId', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── DELETE /api/routes/:routeId — admin delete route ── */
+/* ------------------------------------------------------- DELETE /API/ROUTES/:ROUTEID --------------------------------------------------------------------------------------- */
 router.delete('/:routeId', verifyAdmin, async (req, res) => {
   try {
     const [result] = await pool.query('DELETE FROM routes WHERE route_id=?', [req.params.routeId]);

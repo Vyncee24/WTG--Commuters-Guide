@@ -1,28 +1,19 @@
 const USER = (() => {
 
-  /* ------------------------------------------------------- AUTH HEADER --------------------------------------------------------------------------------------- */
-  function _getToken() {
-    return AUTH.getToken();
-  }
-
+  function _getToken() { return AUTH.getToken(); }
   function _authHeader() {
     return { 'Authorization': `Bearer ${_getToken()}`, 'Content-Type': 'application/json' };
   }
-
-  function _canonicalId(routeId) {
-    return String(routeId).replace(/_rev$/, '');
-  }
+  function _canonicalId(routeId) { return String(routeId).replace(/_rev$/, ''); }
 
   /* ------------------------------------------------------- SAVE ROUTE --------------------------------------------------------------------------------------- */
   async function saveRoute(routeId, from, to) {
     const token = _getToken();
     if (!token) { alert('Please log in to save routes'); return false; }
-
     try {
       const response = await fetch(`${API_URL}/user/save-route`, {
-        method:  'POST',
-        headers: _authHeader(),
-        body:    JSON.stringify({ routeId, from, to })
+        method: 'POST', headers: _authHeader(),
+        body: JSON.stringify({ routeId, from, to })
       });
       const data = await response.json();
       if (!response.ok) {
@@ -30,28 +21,19 @@ const USER = (() => {
         throw new Error(data.error || 'Failed to save route');
       }
       return true;
-    } catch (error) {
-      console.error('Save route error:', error);
-      return false;
-    }
+    } catch (error) { console.error('Save route error:', error); return false; }
   }
 
-  /* ------------------------------------------------------- UNSAVE ROUTE --------------------------------------------------------------------------------------- */
   async function unsaveRoute(routeId) {
     if (!_getToken()) return false;
     try {
       const response = await fetch(`${API_URL}/user/saved-routes/${routeId}`, {
-        method:  'DELETE',
-        headers: _authHeader()
+        method: 'DELETE', headers: _authHeader()
       });
       return response.ok;
-    } catch (error) {
-      console.error('Unsave route error:', error);
-      return false;
-    }
+    } catch (error) { console.error('Unsave route error:', error); return false; }
   }
 
-  /* ------------------------------------------------------- CHECK SAVED --------------------------------------------------------------------------------------- */
   async function isRouteSaved(routeId) {
     if (!_getToken()) return false;
     try {
@@ -59,36 +41,30 @@ const USER = (() => {
       if (!response.ok) return false;
       const routes = await response.json();
       return routes.some(r => r.route_id === routeId);
-    } catch (error) {
-      return false;
-    }
+    } catch (error) { return false; }
   }
 
-  /* ------------------------------------------------------- GET SAVED ROUTES --------------------------------------------------------------------------------------- */
   async function getSavedRoutes() {
     if (!_getToken()) return [];
     try {
       const response = await fetch(`${API_URL}/user/saved-routes`, { headers: _authHeader() });
       if (!response.ok) return [];
       return await response.json();
-    } catch (error) {
-      return [];
-    }
+    } catch (error) { return []; }
   }
 
   /* ------------------------------------------------------- SEARCH HISTORY --------------------------------------------------------------------------------------- */
   function addHistory(routeId, from, to) {
-    const history  = JSON.parse(localStorage.getItem('wtg_search_history') || '[]');
-    const filtered = history.filter(h => h.routeId !== routeId);
-    filtered.unshift({ routeId, from, to, searchedAt: new Date().toISOString() });
-    localStorage.setItem('wtg_search_history', JSON.stringify(filtered.slice(0, 30)));
+    /* no-op — server records history in search_history table */
   }
 
   function getHistory() {
-    return JSON.parse(localStorage.getItem('wtg_search_history') || '[]');
+    /* no-op — returns empty so any legacy UI doesn't show stale data */
+    return [];
   }
 
   function clearHistory() {
+    /* Clear any leftover localStorage data */
     localStorage.removeItem('wtg_search_history');
   }
 
@@ -99,9 +75,7 @@ const USER = (() => {
       const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(id)}`);
       if (!res.ok) return [];
       return await res.json();
-    } catch {
-      return [];
-    }
+    } catch { return []; }
   }
 
   async function addComment(routeId, text) {
@@ -110,9 +84,8 @@ const USER = (() => {
     const id = _canonicalId(routeId);
     try {
       const res = await fetch(`${API_URL}/user/comments/${encodeURIComponent(id)}`, {
-        method:  'POST',
-        headers: _authHeader(),
-        body:    JSON.stringify({ comment: text.trim() })
+        method: 'POST', headers: _authHeader(),
+        body: JSON.stringify({ comment: text.trim() })
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
@@ -120,40 +93,29 @@ const USER = (() => {
         return false;
       }
       return true;
-    } catch (err) {
-      console.error('addComment network error:', err);
-      return false;
-    }
+    } catch (err) { console.error('addComment network error:', err); return false; }
   }
 
   async function deleteComment(routeId, commentId) {
     if (!_getToken()) return false;
     try {
       const res = await fetch(`${API_URL}/user/comments/${commentId}`, {
-        method:  'DELETE',
-        headers: _authHeader()
+        method: 'DELETE', headers: _authHeader()
       });
       return res.ok;
-    } catch {
-      return false;
-    }
+    } catch { return false; }
   }
 
-  /* ------------------------------------------------------- RENDER COMMENTS --------------------------------------------------------------------------------------- */
   async function renderComments(routeId, containerId) {
     const container = document.getElementById(containerId);
     if (!container) return;
-
     const session = AUTH.getSession();
-
     container.innerHTML = `
       <h3>💬 Community Tips &amp; Alternate Routes</h3>
       <p class="text-sm mt-8 mb-16">Know a better route? Share it with fellow commuters!</p>
       <div style="color:var(--text3);padding:16px 0;">Loading comments…</div>
     `;
-
     const comments = await getComments(routeId);
-
     const formHtml = session ? `
       <div class="comment-form">
         <textarea id="comment-input" class="form-control" rows="3"
@@ -193,33 +155,20 @@ const USER = (() => {
     `;
   }
 
-  /* ------------------------------------------------------- SUBMIT / REMOVE COMMENT --------------------------------------------------------------------------------------- */
   async function submitComment(routeId, containerId) {
     const input = document.getElementById('comment-input');
-    if (!input || !input.value.trim()) {
-      TOAST.show('Please write something first.', 'error');
-      return;
-    }
+    if (!input || !input.value.trim()) { TOAST.show('Please write something first.', 'error'); return; }
     const ok = await addComment(routeId, input.value);
-    if (ok) {
-      await renderComments(routeId, containerId);
-      TOAST.show('Comment posted!', 'success');
-    } else {
-      TOAST.show('Could not post comment. Please try again.', 'error');
-    }
+    if (ok) { await renderComments(routeId, containerId); TOAST.show('Comment posted!', 'success'); }
+    else { TOAST.show('Could not post comment. Please try again.', 'error'); }
   }
 
   async function removeComment(routeId, commentId, containerId) {
     const ok = await deleteComment(routeId, commentId);
-    if (ok) {
-      await renderComments(routeId, containerId);
-      TOAST.show('Comment removed.');
-    } else {
-      TOAST.show('Could not remove comment.', 'error');
-    }
+    if (ok) { await renderComments(routeId, containerId); TOAST.show('Comment removed.'); }
+    else { TOAST.show('Could not remove comment.', 'error'); }
   }
 
-  /* ------------------------------------------------------- HELPERS --------------------------------------------------------------------------------------- */
   function escHtml(str) {
     return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }

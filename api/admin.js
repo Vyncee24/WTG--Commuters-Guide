@@ -9,7 +9,7 @@ const pool    = require('../db');
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 
-/* ── Auth middleware: admin only ── */
+/* ------------------------------------------------------- AUTH MIDDLEWARE --------------------------------------------------------------------------------------- */
 function verifyAdmin(req, res, next) {
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -24,7 +24,7 @@ function verifyAdmin(req, res, next) {
   }
 }
 
-/* ── GET /api/admin/stats ── */
+/* ------------------------------------------------------- GET /API/ADMIN/STATS --------------------------------------------------------------------------------------- */
 router.get('/stats', verifyAdmin, async (req, res) => {
   try {
     const [[{ total }]]      = await pool.query(`SELECT COUNT(*) AS total FROM users WHERE role != 'admin'`);
@@ -39,7 +39,7 @@ router.get('/stats', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── GET /api/admin/users ── */
+/* ------------------------------------------------------- GET /API/ADMIN/USERS --------------------------------------------------------------------------------------- */
 router.get('/users', verifyAdmin, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -60,7 +60,7 @@ router.get('/users', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── PUT /api/admin/users/:id ── update name/email/password */
+/* ------------------------------------------------------- PUT /API/ADMIN/USERS/:ID --------------------------------------------------------------------------------------- */
 router.put('/users/:id', verifyAdmin, async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -82,7 +82,7 @@ router.put('/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── PUT /api/admin/users/:id/status ── toggle active/restricted */
+/* ------------------------------------------------------- PUT /API/ADMIN/USERS/:ID/STATUS --------------------------------------------------------------------------------------- */
 router.put('/users/:id/status', verifyAdmin, async (req, res) => {
   try {
     const { status } = req.body;
@@ -98,7 +98,7 @@ router.put('/users/:id/status', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── DELETE /api/admin/users/:id ── */
+/* ------------------------------------------------------- DELETE /API/ADMIN/USERS/:ID --------------------------------------------------------------------------------------- */
 router.delete('/users/:id', verifyAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM users WHERE id=? AND role!=?', [req.params.id, 'admin']);
@@ -109,7 +109,7 @@ router.delete('/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── GET /api/admin/comments ── all comments with user + route info */
+/* ------------------------------------------------------- GET /API/ADMIN/COMMENTS --------------------------------------------------------------------------------------- */
 router.get('/comments', verifyAdmin, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -126,7 +126,7 @@ router.get('/comments', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── DELETE /api/admin/comments/:id ── */
+/* ------------------------------------------------------- DELETE /API/ADMIN/COMMENTS/:ID --------------------------------------------------------------------------------------- */
 router.delete('/comments/:id', verifyAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM comments WHERE id=?', [req.params.id]);

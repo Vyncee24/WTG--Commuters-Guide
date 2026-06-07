@@ -5,6 +5,28 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <title>Admin — WTG</title>
   <link rel="stylesheet" href="style.css"/>
+  <style>
+    /* ------------------------------------------------------- ANALYTICS EXTRAS --------------------------------------------------------------------------------------- */
+    .analytics-grid { display:grid; grid-template-columns:repeat(auto-fill,minmax(160px,1fr)); gap:16px; margin-bottom:24px; }
+    .analytics-card { background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-lg); padding:20px 16px; text-align:center; }
+    .analytics-num  { font-size:2rem; font-weight:700; color:var(--accent); }
+    .analytics-label{ font-size:12px; color:var(--text3); margin-top:4px; }
+    .report-table   { width:100%; border-collapse:collapse; font-size:13px; }
+    .report-table th{ background:var(--bg2); padding:10px 12px; text-align:left; font-weight:600; font-size:12px; color:var(--text2); text-transform:uppercase; letter-spacing:.4px; border-bottom:1px solid var(--border); }
+    .report-table td{ padding:10px 12px; border-bottom:1px solid var(--border); }
+    .report-table tr:last-child td { border-bottom:none; }
+    .report-table tr:hover td { background:var(--bg2); }
+    .filter-row     { display:flex; gap:10px; flex-wrap:wrap; margin-bottom:16px; align-items:flex-end; }
+    .filter-row label{ font-size:12px; color:var(--text2); margin-bottom:4px; display:block; }
+    .filter-row .form-control { font-size:13px; padding:6px 10px; }
+    .etl-status     { font-size:13px; color:var(--text2); padding:12px 16px; background:var(--bg2); border-radius:var(--radius); margin-top:12px; white-space:pre-wrap; max-height:200px; overflow-y:auto; }
+    .tab-bar        { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:20px; }
+    .tab-btn        { padding:8px 16px; border:none; background:none; cursor:pointer; font-size:14px; color:var(--text2); border-bottom:2px solid transparent; margin-bottom:-1px; }
+    .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
+    .star-bar       { display:flex; align-items:center; gap:8px; margin:4px 0; }
+    .star-bar-fill  { height:8px; background:var(--accent); border-radius:4px; min-width:4px; }
+    .star-bar-bg    { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+  </style>
 </head>
 <body>
 
@@ -19,26 +41,35 @@
 </nav>
 
 <div class="admin-layout">
-  <!------------------------------------------------------- SIDEBARRRR ----------------------------------------------------------------------------------------->
+  <!-- ------------------------------------------------------- SIDEBAR --------------------------------------------------------------------------------------- -->
   <aside class="admin-sidebar">
     <div class="admin-sidebar-title">Panel</div>
     <div class="admin-nav-item active" data-section="dashboard" onclick="ADMIN.navigate('dashboard')">
-      <img src="visuals/dashboard.png" alt="" width="30px" style="margin-right: 15px;"> Dashboard 
+      <img src="visuals/dashboard.png" alt="" width="30px" style="margin-right:15px;"> Dashboard
     </div>
     <div class="admin-nav-item" data-section="users" onclick="ADMIN.navigate('users')">
-      <img src="visuals/user.png" alt="" width="30px" style="margin-right: 15px;"> User 
+      <img src="visuals/user.png" alt="" width="30px" style="margin-right:15px;"> Users
     </div>
     <div class="admin-nav-item" data-section="comments" onclick="ADMIN.navigate('comments')">
-      <img src="visuals/chat-bubble.png" alt="" width="30px" style="margin-right: 15px;"> Comments 
+      <img src="visuals/chat-bubble.png" alt="" width="30px" style="margin-right:15px;"> Comments
     </div>
     <div class="admin-nav-item" data-section="routes" onclick="ADMIN.navigate('routes')">
-      <img src="visuals/maps.png" alt="" width="30px" style="margin-right: 15px;"> Routes 
+      <img src="visuals/maps.png" alt="" width="30px" style="margin-right:15px;"> Routes
+    </div>
+    <div class="admin-nav-item" data-section="analytics" onclick="ADMIN.navigate('analytics')">
+      <span style="font-size:20px;margin-right:15px;">📊</span> Analytics
+    </div>
+    <div class="admin-nav-item" data-section="reports" onclick="ADMIN.navigate('reports')">
+      <span style="font-size:20px;margin-right:15px;">📄</span> Reports
+    </div>
+    <div class="admin-nav-item" data-section="etl" onclick="ADMIN.navigate('etl')">
+      <span style="font-size:20px;margin-right:15px;">⚙️</span> ETL
     </div>
   </aside>
 
   <main class="admin-content">
 
-    <!------------------------------------------------------- DASHBOARD THINGS ----------------------------------------------------------------------------------------->
+    <!-- ------------------------------------------------------- DASHBOARD --------------------------------------------------------------------------------------- -->
     <div class="admin-section active" id="section-dashboard">
       <h2 style="margin-bottom:24px;">Dashboard</h2>
       <div class="stats-grid">
@@ -63,7 +94,6 @@
           <div class="stat-label">Total Routes</div>
         </div>
       </div>
-
       <div class="card">
         <h3 style="margin-bottom:4px;">Quick Actions</h3>
         <p class="text-sm mt-8" style="margin-bottom:16px;">Jump to common tasks</p>
@@ -71,83 +101,248 @@
           <button class="btn btn-secondary" onclick="ADMIN.navigate('users')">👥 Manage Users</button>
           <button class="btn btn-secondary" onclick="ADMIN.navigate('comments')">💬 Moderate Comments</button>
           <button class="btn btn-secondary" onclick="ADMIN.navigate('routes')">🗺 Manage Routes</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('analytics')">📊 View Analytics</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('etl')">⚙️ Run ETL</button>
+        </div>
+      </div>
+
+      <!-- Most Used Routes Bar Chart -->
+      <div class="card" style="margin-top:20px;">
+        <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px;">
+          <h3 style="margin:0;">Most Used Routes</h3>
+          <span style="font-size:12px;color:var(--text3);">by total searches</span>
+        </div>
+        <p class="text-sm" style="color:var(--text3);margin-bottom:16px;">Live from OLTP — updates as users search</p>
+        <div id="dashboard-route-chart">
+          <div style="text-align:center;color:var(--text3);padding:20px;">Loading chart…</div>
         </div>
       </div>
     </div>
 
-    <!------------------------------------------------------- USERS ----------------------------------------------------------------------------------------->
+    <!-- ------------------------------------------------------- USERS --------------------------------------------------------------------------------------- -->
     <div class="admin-section" id="section-users">
       <div class="section-header">
         <h2>Users</h2>
         <input class="form-control" id="user-search" type="text"
-          placeholder="Search name or email..." style="width:240px;"
+          placeholder="Search name or email…" style="width:240px;"
           oninput="ADMIN.renderUsers(this.value)"/>
       </div>
-
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
         <div style="overflow-x:auto;">
           <table class="user-table">
-            <thead>
-              <tr>
-                <th>Name</th>
-                <th>Email</th>
-                <th>Joined</th>
-                <th>Activity</th>
-                <th>Status</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th>Name</th><th>Email</th><th>Joined</th><th>Activity</th><th>Status</th><th>Actions</th>
+            </tr></thead>
             <tbody id="users-tbody">
-              <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;">Loading...</td></tr>
+              <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;">Loading…</td></tr>
             </tbody>
           </table>
         </div>
       </div>
     </div>
 
-    <!------------------------------------------------------- COMMENTS ----------------------------------------------------------------------------------------->
+    <!-- ------------------------------------------------------- COMMENTS --------------------------------------------------------------------------------------- -->
     <div class="admin-section" id="section-comments">
       <h2 style="margin-bottom:24px;">All Comments</h2>
       <div id="all-comments-container"></div>
     </div>
 
-    <!------------------------------------------------------- ROUTES ----------------------------------------------------------------------------------------->
+    <!-- ------------------------------------------------------- ROUTES --------------------------------------------------------------------------------------- -->
     <div class="admin-section" id="section-routes">
       <div class="section-header">
         <h2>Routes</h2>
         <button class="btn btn-primary" onclick="ADMIN.openAddRouteModal()">+ Add Route</button>
       </div>
-
       <div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;">
         <div style="overflow-x:auto;">
           <table class="user-table">
-            <thead>
-              <tr>
-                <th>Route ID</th>
-                <th>From</th>
-                <th>To</th>
-                <th>Duration / Fare</th>
-                <th>Actions</th>
-              </tr>
-            </thead>
+            <thead><tr>
+              <th>Route ID</th><th>From</th><th>To</th><th>Duration / Fare</th><th>Searches</th><th>Actions</th>
+            </tr></thead>
             <tbody id="routes-tbody">
-              <tr><td colspan="5" style="text-align:center;color:var(--text3);padding:32px;">Loading...</td></tr>
+              <tr><td colspan="6" style="text-align:center;color:var(--text3);padding:32px;">Loading…</td></tr>
             </tbody>
           </table>
         </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------- ANALYTICS --------------------------------------------------------------------------------------- -->
+    <div class="admin-section" id="section-analytics">
+      <h2 style="margin-bottom:8px;">Analytics Dashboard</h2>
+      <p class="text-sm" style="color:var(--text3);margin-bottom:24px;">
+        Data is sourced from the <strong>commuter_olap</strong> star schema. Run ETL first if numbers are stale.
+      </p>
+
+      <!-- Search Summary Cards -->
+      <div class="analytics-grid">
+        <div class="analytics-card">
+          <div class="analytics-num" id="an-total">—</div>
+          <div class="analytics-label">Total Searches</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-num" id="an-today">—</div>
+          <div class="analytics-label">Searches Today</div>
+        </div>
+        <div class="analytics-card">
+          <div class="analytics-num" id="an-month">—</div>
+          <div class="analytics-label">This Month</div>
+        </div>
+      </div>
+
+      <!-- Tab bar for sub-sections -->
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="ADMIN.analyticsTab('most-searched',this)">Most Searched</button>
+        <button class="tab-btn" onclick="ADMIN.analyticsTab('destinations',this)">Destinations</button>
+        <button class="tab-btn" onclick="ADMIN.analyticsTab('most-saved',this)">Most Saved</button>
+        <button class="tab-btn" onclick="ADMIN.analyticsTab('top-rated',this)">Top Rated</button>
+        <button class="tab-btn" onclick="ADMIN.analyticsTab('trend',this)">Trend</button>
+        <button class="tab-btn" onclick="ADMIN.analyticsTab('olap',this)">OLAP Queries</button>
+      </div>
+
+      <!-- Most Searched -->
+      <div class="analytics-tab-panel" id="atab-most-searched">
+        <div id="an-most-searched-container">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+        </div>
+      </div>
+
+      <!-- Destinations -->
+      <div class="analytics-tab-panel hidden" id="atab-destinations">
+        <div id="an-destinations-container">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+        </div>
+      </div>
+
+      <!-- Most Saved -->
+      <div class="analytics-tab-panel hidden" id="atab-most-saved">
+        <div id="an-most-saved-container">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+        </div>
+      </div>
+
+      <!-- Top Rated -->
+      <div class="analytics-tab-panel hidden" id="atab-top-rated">
+        <div id="an-top-rated-container">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+        </div>
+      </div>
+
+      <!-- Trend -->
+      <div class="analytics-tab-panel hidden" id="atab-trend">
+        <div id="an-trend-container">
+          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
+        </div>
+      </div>
+
+      <!-- OLAP Queries -->
+      <div class="analytics-tab-panel hidden" id="atab-olap">
+        <div class="card" style="margin-bottom:16px;">
+          <h4 style="margin-bottom:12px;">Roll-Up (Day → Month → Year)</h4>
+          <div class="filter-row">
+            <div><label>Destination (optional)</label><input class="form-control" id="olap-rollup-dest" placeholder="e.g. SM Tanza" style="width:200px;"/></div>
+            <button class="btn btn-secondary" onclick="ADMIN.runRollup()">Run Roll-Up</button>
+          </div>
+          <div id="olap-rollup-result"></div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <h4 style="margin-bottom:12px;">Drill-Down (Year → Month → Day)</h4>
+          <div class="filter-row">
+            <div><label>Year</label><input class="form-control" id="olap-dd-year" type="number" placeholder="2025" style="width:100px;"/></div>
+            <div><label>Month (optional)</label><input class="form-control" id="olap-dd-month" type="number" placeholder="6" min="1" max="12" style="width:100px;"/></div>
+            <div><label>Day (optional)</label><input class="form-control" id="olap-dd-day" type="number" placeholder="15" min="1" max="31" style="width:100px;"/></div>
+            <div><label>Destination (optional)</label><input class="form-control" id="olap-dd-dest" placeholder="SM Tanza" style="width:160px;"/></div>
+            <button class="btn btn-secondary" onclick="ADMIN.runDrilldown()">Run Drill-Down</button>
+          </div>
+          <div id="olap-drilldown-result"></div>
+        </div>
+        <div class="card" style="margin-bottom:16px;">
+          <h4 style="margin-bottom:12px;">Slice (fix one dimension)</h4>
+          <div class="filter-row">
+            <div><label>Destination</label><input class="form-control" id="olap-slice-dest" placeholder="SM Tanza" style="width:200px;"/></div>
+            <button class="btn btn-secondary" onclick="ADMIN.runSlice()">Run Slice</button>
+          </div>
+          <div id="olap-slice-result"></div>
+        </div>
+        <div class="card">
+          <h4 style="margin-bottom:12px;">Dice (multiple filters)</h4>
+          <div class="filter-row">
+            <div><label>Destination</label><input class="form-control" id="olap-dice-dest" placeholder="SM Tanza" style="width:160px;"/></div>
+            <div><label>Month</label><input class="form-control" id="olap-dice-month" type="number" placeholder="6" min="1" max="12" style="width:90px;"/></div>
+            <div><label>Min Rating</label><input class="form-control" id="olap-dice-rating" type="number" placeholder="4" min="1" max="5" step="0.1" style="width:100px;"/></div>
+            <button class="btn btn-secondary" onclick="ADMIN.runDice()">Run Dice</button>
+          </div>
+          <div id="olap-dice-result"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------- REPORTS --------------------------------------------------------------------------------------- -->
+    <div class="admin-section" id="section-reports">
+      <h2 style="margin-bottom:8px;">Reports</h2>
+      <p class="text-sm" style="color:var(--text3);margin-bottom:24px;">Generate and export route data reports. Run ETL first to ensure the OLAP data is current.</p>
+
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="ADMIN.reportTab('route-usage',this)">Route Usage</button>
+        <button class="tab-btn" onclick="ADMIN.reportTab('route-popularity',this)">Popularity</button>
+        <button class="tab-btn" onclick="ADMIN.reportTab('route-ratings',this)">Ratings</button>
+      </div>
+
+      <!-- Filters -->
+      <div class="card" style="margin-bottom:16px;">
+        <div class="filter-row">
+          <div><label>From Date</label><input class="form-control" id="rpt-from-date" type="date"/></div>
+          <div><label>To Date</label><input class="form-control" id="rpt-to-date" type="date"/></div>
+          <div><label>Destination</label><input class="form-control" id="rpt-destination" placeholder="e.g. SM Tanza" style="width:160px;"/></div>
+          <button class="btn btn-secondary" onclick="ADMIN.loadReport()">Apply Filters</button>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:8px;" id="export-btns">
+          <button class="btn btn-sm btn-secondary" onclick="ADMIN.exportReport('csv')">⬇ CSV</button>
+          <button class="btn btn-sm btn-secondary" onclick="ADMIN.exportReport('excel')">⬇ Excel</button>
+          <button class="btn btn-sm btn-secondary" onclick="ADMIN.exportReport('pdf')">⬇ PDF</button>
+        </div>
+      </div>
+
+      <div id="report-container">
+        <div class="empty-state"><div class="empty-icon">📄</div><p>Select a report tab to load data.</p></div>
+      </div>
+    </div>
+
+    <!-- ------------------------------------------------------- ETL --------------------------------------------------------------------------------------- -->
+    <div class="admin-section" id="section-etl">
+      <h2 style="margin-bottom:8px;">ETL Pipeline</h2>
+      <p class="text-sm" style="color:var(--text3);margin-bottom:24px;">
+        Extract data from <strong>wtg_commuters_guide</strong> (OLTP) and load it into
+        <strong>commuter_olap</strong> (OLAP star schema).
+      </p>
+
+      <div class="card" style="margin-bottom:20px;">
+        <h4 style="margin-bottom:4px;">ETL Process</h4>
+        <ol style="color:var(--text2);font-size:14px;line-height:1.8;padding-left:20px;margin:12px 0;">
+          <li><strong>EXTRACT</strong> — reads <code>search_history</code>, <code>saved_routes</code>, <code>comments</code> from OLTP</li>
+          <li><strong>TRANSFORM</strong> — aggregates per (date, route, user): search_count, save_count, avg_rating</li>
+          <li><strong>LOAD</strong> — upserts aggregated rows into <code>commuter_olap.fact_route_usage</code></li>
+        </ol>
+        <div style="display:flex;gap:10px;margin-top:16px;align-items:center;">
+          <button class="btn btn-primary" id="etl-run-btn" onclick="ADMIN.runETL()">Run ETL Now</button>
+          <button class="btn btn-secondary" onclick="ADMIN.checkETLStatus()">Check Status</button>
+          <span id="etl-spinner" style="display:none;font-size:13px;color:var(--text3);">Running…</span>
+        </div>
+      </div>
+
+      <div class="card">
+        <h4 style="margin-bottom:8px;">Last Run Status</h4>
+        <div id="etl-status-display" class="etl-status">No ETL run this session. Click "Run ETL Now" to start.</div>
       </div>
     </div>
 
   </main>
 </div>
 
-<!------------------------------------------------------- DELETE THINGS ----------------------------------------------------------------------------------------->
+<!-- ------------------------------------------------------- MODALS --------------------------------------------------------------------------------------- -->
 <div class="modal-overlay hidden" id="delete-modal">
   <div class="modal">
-    <div class="modal-header">
-      <h3>Confirm Delete</h3>
-      <button class="modal-close" onclick="ADMIN.closeDeleteModal()">✕</button>
-    </div>
+    <div class="modal-header"><h3>Confirm Delete</h3><button class="modal-close" onclick="ADMIN.closeDeleteModal()">✕</button></div>
     <p>Are you sure you want to delete <strong id="delete-confirm-name"></strong>? This cannot be undone.</p>
     <input type="hidden" id="delete-confirm-id"/>
     <div style="display:flex;gap:10px;margin-top:24px;">
@@ -157,25 +352,12 @@
   </div>
 </div>
 
-<!------------------------------------------------------- EDIT USER THINGS ----------------------------------------------------------------------------------------->
 <div class="modal-overlay hidden" id="edit-modal">
   <div class="modal">
-    <div class="modal-header">
-      <h3>Edit User</h3>
-      <button class="modal-close" onclick="ADMIN.closeEditModal()">✕</button>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Full Name</label>
-      <input class="form-control" id="edit-name" type="text" placeholder="Name"/>
-    </div>
-    <div class="form-group">
-      <label class="form-label">Email</label>
-      <input class="form-control" id="edit-email" type="email" placeholder="Email"/>
-    </div>
-    <div class="form-group">
-      <label class="form-label">New Password <span style="color:var(--text3);font-weight:400;">(leave blank to keep)</span></label>
-      <input class="form-control" id="edit-password" type="password" placeholder="New password (optional)"/>
-    </div>
+    <div class="modal-header"><h3>Edit User</h3><button class="modal-close" onclick="ADMIN.closeEditModal()">✕</button></div>
+    <div class="form-group"><label class="form-label">Full Name</label><input class="form-control" id="edit-name" type="text" placeholder="Name"/></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-control" id="edit-email" type="email" placeholder="Email"/></div>
+    <div class="form-group"><label class="form-label">New Password <span style="color:var(--text3);font-weight:400;">(leave blank to keep)</span></label><input class="form-control" id="edit-password" type="password" placeholder="New password (optional)"/></div>
     <div style="display:flex;gap:10px;margin-top:8px;">
       <button class="btn btn-primary btn-full" onclick="ADMIN.saveEdit()">Save Changes</button>
       <button class="btn btn-ghost btn-full" onclick="ADMIN.closeEditModal()">Cancel</button>
@@ -183,76 +365,24 @@
   </div>
 </div>
 
-<!------------------------------------------------------- EDIT ROUTE MODAL ----------------------------------------------------------------------------------------->
 <div class="modal-overlay hidden" id="edit-route-modal">
   <div class="modal" style="max-width:680px;width:95%;max-height:90vh;overflow-y:auto;">
-    <div class="modal-header">
-      <h3>Edit Route</h3>
-      <button class="modal-close" onclick="ADMIN.closeEditRouteModal()">✕</button>
-    </div>
-
-    <p class="text-sm" style="color:var(--text3);margin-bottom:20px;">Update the route details below. Changes are saved immediately.</p>
-
-    <div class="form-group">
-      <label class="form-label">Route ID <span style="color:var(--text3);font-weight:400;">(cannot be changed)</span></label>
-      <input class="form-control" id="er-route-id" type="text" disabled style="opacity:0.5;cursor:not-allowed;"/>
-    </div>
-
+    <div class="modal-header"><h3>Edit Route</h3><button class="modal-close" onclick="ADMIN.closeEditRouteModal()">✕</button></div>
+    <div class="form-group"><label class="form-label">Route ID</label><input class="form-control" id="er-route-id" type="text" disabled style="opacity:0.5;cursor:not-allowed;"/></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="form-group">
-        <label class="form-label">From Location <span style="color:var(--red);">*</span></label>
-        <input class="form-control" id="er-from" type="text" placeholder="e.g. CVSU CCAT"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">To Location <span style="color:var(--red);">*</span></label>
-        <input class="form-control" id="er-to" type="text" placeholder="e.g. SM Tanza"/>
-      </div>
+      <div class="form-group"><label class="form-label">From <span style="color:var(--red);">*</span></label><input class="form-control" id="er-from" type="text"/></div>
+      <div class="form-group"><label class="form-label">To <span style="color:var(--red);">*</span></label><input class="form-control" id="er-to" type="text"/></div>
     </div>
-
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-      <div class="form-group">
-        <label class="form-label">Duration</label>
-        <input class="form-control" id="er-duration" type="text" placeholder="e.g. 45–60 mins"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Total Fare</label>
-        <input class="form-control" id="er-fare" type="text" placeholder="e.g. 30–50" onblur="ADMIN.formatFare(this)"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Primary Transport</label>
-        <select class="form-control" id="er-transport">
-          <option value="jeep">Jeep</option>
-          <option value="bus">Bus</option>
-          <option value="tricycle">Tricycle</option>
-          <option value="walk">Walk</option>
-          <option value="fx">FX</option>
-          <option value="uv">UV Express</option>
-        </select>
-      </div>
+      <div class="form-group"><label class="form-label">Duration</label><input class="form-control" id="er-duration" type="text"/></div>
+      <div class="form-group"><label class="form-label">Fare</label><input class="form-control" id="er-fare" type="text" onblur="ADMIN.formatFare(this)"/></div>
+      <div class="form-group"><label class="form-label">Transport</label><select class="form-control" id="er-transport"><option value="jeep">Jeep</option><option value="bus">Bus</option><option value="tricycle">Tricycle</option><option value="walk">Walk</option><option value="fx">FX</option><option value="uv">UV Express</option></select></div>
     </div>
-
-    <div class="form-group">
-      <label class="form-label">Tags <span style="color:var(--text3);font-weight:400;">(comma-separated, e.g. Cavite, Student Route)</span></label>
-      <input class="form-control" id="er-tags" type="text" placeholder="Cavite, Student Route"/>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Google Maps Embed URL <span style="color:var(--text3);font-weight:400;">(optional — shows a map preview on the result page)</span></label>
-      <input class="form-control" id="er-map-embed-url" type="url" placeholder="https://www.google.com/maps/embed?pb=..."/>
-      <p class="text-sm" style="color:var(--text3);margin-top:6px;">
-        Google Maps → find the location → <strong>Share → Embed a map</strong> → copy only the URL inside <code>src="..."</code>.
-      </p>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;">
-      <label class="form-label" style="margin:0;font-size:15px;font-weight:600;">Journey Steps</label>
-      <button type="button" class="btn btn-sm btn-secondary" onclick="ADMIN.addEditRouteStep()">+ Add Step</button>
-    </div>
-
+    <div class="form-group"><label class="form-label">Tags</label><input class="form-control" id="er-tags" type="text" placeholder="Cavite, Student Route"/></div>
+    <div class="form-group"><label class="form-label">Google Maps Embed URL</label><input class="form-control" id="er-map-embed-url" type="url"/></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;"><label class="form-label" style="margin:0;font-size:15px;font-weight:600;">Journey Steps</label><button type="button" class="btn btn-sm btn-secondary" onclick="ADMIN.addEditRouteStep()">+ Add Step</button></div>
     <div id="er-steps-list"></div>
-
-    <p id="er-no-steps-hint" class="text-sm" style="color:var(--text3);margin-bottom:16px;display:none;">No steps added yet. Click "+ Add Step" to describe each leg of the journey.</p>
-
+    <p id="er-no-steps-hint" class="text-sm" style="color:var(--text3);margin-bottom:16px;display:none;">No steps added.</p>
     <div style="display:flex;gap:10px;margin-top:20px;">
       <button class="btn btn-primary btn-full" onclick="ADMIN.submitEditRoute()">Save Changes</button>
       <button class="btn btn-ghost btn-full" onclick="ADMIN.closeEditRouteModal()">Cancel</button>
@@ -260,76 +390,24 @@
   </div>
 </div>
 
-<!------------------------------------------------------- ADD ROUTE MODAL ----------------------------------------------------------------------------------------->
 <div class="modal-overlay hidden" id="add-route-modal">
   <div class="modal" style="max-width:680px;width:95%;max-height:90vh;overflow-y:auto;">
-    <div class="modal-header">
-      <h3>Add New Route</h3>
-      <button class="modal-close" onclick="ADMIN.closeAddRouteModal()">✕</button>
-    </div>
-
-    <p class="text-sm" style="color:var(--text3);margin-bottom:20px;">Fill in the route details. Steps describe each leg of the journey.</p>
-
+    <div class="modal-header"><h3>Add New Route</h3><button class="modal-close" onclick="ADMIN.closeAddRouteModal()">✕</button></div>
     <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-      <div class="form-group">
-        <label class="form-label">From Location <span style="color:var(--red);">*</span></label>
-        <input class="form-control" id="ar-from" type="text" placeholder="e.g. CVSU CCAT" oninput="ADMIN.autoRouteId()"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">To Location <span style="color:var(--red);">*</span></label>
-        <input class="form-control" id="ar-to" type="text" placeholder="e.g. SM Tanza" oninput="ADMIN.autoRouteId()"/>
-      </div>
+      <div class="form-group"><label class="form-label">From <span style="color:var(--red);">*</span></label><input class="form-control" id="ar-from" type="text" oninput="ADMIN.autoRouteId()"/></div>
+      <div class="form-group"><label class="form-label">To <span style="color:var(--red);">*</span></label><input class="form-control" id="ar-to" type="text" oninput="ADMIN.autoRouteId()"/></div>
     </div>
-
-    <div class="form-group">
-      <label class="form-label">Route ID <span style="color:var(--red);">*</span> <span style="color:var(--text3);font-weight:400;">(auto-filled from locations, must be unique)</span></label>
-      <input class="form-control" id="ar-route-id" type="text" placeholder="e.g. cvsu-ccat_sm-tanza"/>
-    </div>
-
+    <div class="form-group"><label class="form-label">Route ID <span style="color:var(--red);">*</span></label><input class="form-control" id="ar-route-id" type="text"/></div>
     <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;">
-      <div class="form-group">
-        <label class="form-label">Duration</label>
-        <input class="form-control" id="ar-duration" type="text" placeholder="e.g. 45–60 mins"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Total Fare</label>
-        <input class="form-control" id="ar-fare" type="text" placeholder="e.g. 30–50" onblur="ADMIN.formatFare(this)"/>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Primary Transport</label>
-        <select class="form-control" id="ar-transport">
-          <option value="jeep">Jeep</option>
-          <option value="bus">Bus</option>
-          <option value="tricycle">Tricycle</option>
-          <option value="walk">Walk</option>
-          <option value="fx">FX</option>
-          <option value="uv">UV Express</option>
-        </select>
-      </div>
+      <div class="form-group"><label class="form-label">Duration</label><input class="form-control" id="ar-duration" type="text"/></div>
+      <div class="form-group"><label class="form-label">Fare</label><input class="form-control" id="ar-fare" type="text" onblur="ADMIN.formatFare(this)"/></div>
+      <div class="form-group"><label class="form-label">Transport</label><select class="form-control" id="ar-transport"><option value="jeep">Jeep</option><option value="bus">Bus</option><option value="tricycle">Tricycle</option><option value="walk">Walk</option><option value="fx">FX</option><option value="uv">UV Express</option></select></div>
     </div>
-
-    <div class="form-group">
-      <label class="form-label">Tags <span style="color:var(--text3);font-weight:400;">(comma-separated, e.g. Cavite, Student Route)</span></label>
-      <input class="form-control" id="ar-tags" type="text" placeholder="Cavite, Student Route"/>
-    </div>
-
-    <div class="form-group">
-      <label class="form-label">Google Maps Embed URL <span style="color:var(--text3);font-weight:400;">(optional — shows a map or Street View preview on the result page)</span></label>
-      <input class="form-control" id="ar-map-embed-url" type="url" placeholder="https://www.google.com/maps/embed?pb=..."/>
-      <p class="text-sm" style="color:var(--text3);margin-top:6px;">
-        How to get this URL: Open Google Maps → find the location (enter Street View if you want) → click <strong>Share → Embed a map</strong> → copy only the URL inside <code>src="..."</code>.
-      </p>
-    </div>
-
-    <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;">
-      <label class="form-label" style="margin:0;font-size:15px;font-weight:600;">Journey Steps</label>
-      <button type="button" class="btn btn-sm btn-secondary" onclick="ADMIN.addRouteStep()">+ Add Step</button>
-    </div>
-
+    <div class="form-group"><label class="form-label">Tags</label><input class="form-control" id="ar-tags" type="text" placeholder="Cavite, Student Route"/></div>
+    <div class="form-group"><label class="form-label">Google Maps Embed URL</label><input class="form-control" id="ar-map-embed-url" type="url"/></div>
+    <div style="display:flex;justify-content:space-between;align-items:center;margin:20px 0 10px;"><label class="form-label" style="margin:0;font-size:15px;font-weight:600;">Journey Steps</label><button type="button" class="btn btn-sm btn-secondary" onclick="ADMIN.addRouteStep()">+ Add Step</button></div>
     <div id="ar-steps-list"></div>
-
-    <p id="ar-no-steps-hint" class="text-sm" style="color:var(--text3);margin-bottom:16px;">No steps added yet. Click "+ Add Step" to describe each leg of the journey.</p>
-
+    <p id="ar-no-steps-hint" class="text-sm" style="color:var(--text3);margin-bottom:16px;">No steps yet.</p>
     <div style="display:flex;gap:10px;margin-top:20px;">
       <button class="btn btn-primary btn-full" onclick="ADMIN.submitNewRoute()">Save Route</button>
       <button class="btn btn-ghost btn-full" onclick="ADMIN.closeAddRouteModal()">Cancel</button>
@@ -344,10 +422,7 @@
 <script src="routes.js"></script>
 <script src="admin.js"></script>
 <script>
-  // Guard: admin only
   AUTH.requireAdmin();
-
-  // Initial render
   ADMIN.renderDashboard();
 </script>
 </body>

@@ -1,20 +1,6 @@
 /**
- * api/admin.js — Admin-only API routes for WTG: Commuters Guide
+ * api_admin.js — Admin-only API routes for WTG: Commuters Guide
  * Requires a valid JWT with role === 'admin'
- *
- * FIXES APPLIED:
- *  - BUG FIX 1 (PRIMARY): /stats now uses a single aggregate SQL query
- *    returning total, active, restricted, comments AND routes in one round-trip.
- *    Previously, 4 separate queries meant any one failure killed the whole
- *    response, producing a 500 with {error: ...} which the frontend silently
- *    mapped to 0 for every stat.
- *
- *  - BUG FIX 2: Added routes count to /stats response. The routes table
- *    exists and is seeded by setup-database.js, but the stat was never exposed.
- *
- *  - BUG FIX 3: verifyAdmin is now async and performs a DB lookup to confirm
- *    the admin account still exists in the database. Previously only the JWT
- *    signature was checked — a deleted admin's token stayed valid for 24 hours.
  */
 
 const express = require('express');
@@ -23,7 +9,7 @@ const pool    = require('../db');
 const jwt     = require('jsonwebtoken');
 const bcrypt  = require('bcryptjs');
 
-/* ── Auth middleware: admin only (now verifies DB record too) ── */
+/* ------------------------------------------------------- AUTH MIDDLEWARE --------------------------------------------------------------------------------------- */
 async function verifyAdmin(req, res, next) {
   const header = req.headers.authorization || '';
   const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
@@ -34,8 +20,7 @@ async function verifyAdmin(req, res, next) {
       return res.status(403).json({ error: 'Admin access required' });
     }
 
-    // FIX 3: Verify admin still exists in DB with role = 'admin'.
-    // Without this, a deleted admin's valid JWT grants full access until expiry.
+    // Verify the admin account still exists in the database
     const [rows] = await pool.query(
       'SELECT id FROM users WHERE id = ? AND role = ?',
       [decoded.id, 'admin']
@@ -51,10 +36,7 @@ async function verifyAdmin(req, res, next) {
   }
 }
 
-/* ── GET /api/admin/stats ── */
-// FIX 1 + FIX 2: Single aggregate query — one DB round-trip, includes routes.
-// If the comments or routes tables do not exist yet, per-table COUNTs are
-// wrapped in a subquery so a missing table still returns 0 rather than crashing.
+/* ------------------------------------------------------- GET /API/ADMIN/STATS --------------------------------------------------------------------------------------- */
 router.get('/stats', verifyAdmin, async (req, res) => {
   try {
     const [[stats]] = await pool.query(`
@@ -79,7 +61,7 @@ router.get('/stats', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── GET /api/admin/users ── */
+/* ------------------------------------------------------- GET /API/ADMIN/USERS --------------------------------------------------------------------------------------- */
 router.get('/users', verifyAdmin, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -100,7 +82,7 @@ router.get('/users', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── PUT /api/admin/users/:id ── update name/email/password */
+/* ------------------------------------------------------- PUT /API/ADMIN/USERS/:ID --------------------------------------------------------------------------------------- */
 router.put('/users/:id', verifyAdmin, async (req, res) => {
   try {
     const { name, email, password } = req.body;
@@ -122,7 +104,7 @@ router.put('/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── PUT /api/admin/users/:id/status ── toggle active/restricted */
+/* ------------------------------------------------------- PUT /API/ADMIN/USERS/:ID/STATUS --------------------------------------------------------------------------------------- */
 router.put('/users/:id/status', verifyAdmin, async (req, res) => {
   try {
     const { status } = req.body;
@@ -143,7 +125,7 @@ router.put('/users/:id/status', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── DELETE /api/admin/users/:id ── */
+/* ------------------------------------------------------- DELETE /API/ADMIN/USERS/:ID --------------------------------------------------------------------------------------- */
 router.delete('/users/:id', verifyAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM users WHERE id=? AND role!=?', [req.params.id, 'admin']);
@@ -154,7 +136,7 @@ router.delete('/users/:id', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── GET /api/admin/comments ── all comments with user + route info */
+/* ------------------------------------------------------- GET /API/ADMIN/COMMENTS --------------------------------------------------------------------------------------- */
 router.get('/comments', verifyAdmin, async (req, res) => {
   try {
     const [rows] = await pool.query(
@@ -171,7 +153,7 @@ router.get('/comments', verifyAdmin, async (req, res) => {
   }
 });
 
-/* ── DELETE /api/admin/comments/:id ── */
+/* ------------------------------------------------------- DELETE /API/ADMIN/COMMENTS/:ID --------------------------------------------------------------------------------------- */
 router.delete('/comments/:id', verifyAdmin, async (req, res) => {
   try {
     await pool.query('DELETE FROM comments WHERE id=?', [req.params.id]);

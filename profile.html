@@ -51,10 +51,9 @@
   <div id="tab-history" class="hidden">
     <div class="section-header">
       <h3>Recent Searches</h3>
-      <button class="btn btn-sm btn-ghost" onclick="clearHistory()">Clear All</button>
+      <button class="btn btn-sm btn-ghost" id="clear-history-btn" onclick="clearHistory()">Clear All</button>
     </div>
     <div id="history-list" class="history-list"></div>
-    
   </div>
 
 </div>
@@ -68,16 +67,19 @@
   const session = AUTH.requireAuth('login.html');
   if (!session) throw new Error('not logged in');
 
-  // Setup nav
+  const _token = () => AUTH.getToken();
+  const _authH = () => ({ 'Authorization': `Bearer ${_token()}`, 'Content-Type': 'application/json' });
+
+  /* ── nav ── */
   document.getElementById('nav-logout').onclick = e => { e.preventDefault(); AUTH.logout(); };
 
-  // User header
+  /* ── user header ── */
   const user = AUTH.getCurrentUser();
-  document.getElementById('user-name').textContent = user.name;
+  document.getElementById('user-name').textContent  = user.name;
   document.getElementById('user-email').textContent = user.email;
   document.getElementById('user-avatar').textContent = user.name.charAt(0).toUpperCase();
 
-  // Tab switch
+  /* ── tab switch ── */
   function switchTab(tab, btn) {
     document.querySelectorAll('.tab-btn').forEach(b => b.classList.remove('active'));
     btn.classList.add('active');
@@ -85,14 +87,15 @@
     document.getElementById('tab-history').classList.toggle('hidden', tab !== 'history');
     if (tab === 'history') renderHistory();
   }
-  // Render saved routes
+
+  /* ── saved routes ── */
   async function renderSaved() {
     const saved = await USER.getSavedRoutes();
-    const grid = document.getElementById('saved-grid');
+    const grid  = document.getElementById('saved-grid');
     if (!saved || saved.length === 0) {
       grid.innerHTML = `
         <div class="empty-state" style="grid-column:1/-1;">
-          <div class="empty-icon"><img src="visuals/Sad.png" alt="" width = "350px"></div>
+          <div class="empty-icon"><img src="visuals/Sad.png" alt="" width="350px"></div>
           <h3>Oh no! No saved routes yet</h3>
           <p>Come and try saving routes with us</p>
           <a href="index.html" class="btn btn-primary mt-16">Find a Route</a>
@@ -102,47 +105,119 @@
     grid.innerHTML = saved.map(r => `
       <div class="route-card">
         <div class="route-card-from-to">
-          <span class="route-loc">${r.from_location}</span>
+          <span class="route-loc">${escHtml(r.from_location)}</span>
           <span class="route-arrow">→</span>
-          <span class="route-loc">${r.to_location}</span>
+          <span class="route-loc">${escHtml(r.to_location)}</span>
         </div>
         <div class="route-card-meta mt-8">Saved ${timeAgo(r.saved_at)}</div>
         <div style="display:flex;gap:8px;margin-top:14px;">
-          <button class="btn btn-sm btn-primary flex-1" onclick="viewRoute('${r.from_location}','${r.to_location}')">View</button>
-          <button class="btn btn-sm btn-ghost" onclick="unsave('${r.route_id}')">Remove</button>
+          <button class="btn btn-sm btn-primary flex-1"
+            onclick="viewRoute('${escAttr(r.from_location)}','${escAttr(r.to_location)}')">View</button>
+          <button class="btn btn-sm btn-ghost" onclick="unsave('${escAttr(r.route_id)}')">Remove</button>
         </div>
-      </div>
-    `).join('');
+      </div>`).join('');
   }
 
-  // Render history
-  function renderHistory() {
-    const hist = USER.getHistory();
+  /* ── history: read from DB via API ── */
+  async function renderHistory() {
     const list = document.getElementById('history-list');
-    if (hist.length === 0) {
-      list.innerHTML = `
-        <div class="empty-state">
-          <div class="empty-icon">🕓</div>
-          <h3>No search history</h3>
-          <p>Your recent route searches will appear here.</p>
+    list.innerHTML = `<div style="color:var(--text3);padding:20px 0;text-align:center;font-size:14px;">Loading…</div>`;
+
+    try {
+      const res = await fetch(`${API_URL}/history`, { headers: _authH() });
+
+      if (!res.ok) {
+        list.innerHTML = `<div class="empty-state">
+          <div class="empty-icon">⚠️</div>
+          <h3>Could not load history</h3>
+          <p class="text-sm">Server returned ${res.status}. Make sure the server is running.</p>
         </div>`;
-      return;
-    }
-    list.innerHTML = hist.map(h => `
-      <div class="history-item" onclick="viewRoute('${h.from}','${h.to}')">
-        <div>
-          <div class="d-flex align-center gap-8">
-            <span style="font-weight:500;">${h.from}</span>
-            <span class="text-muted">→</span>
-            <span style="font-weight:500;">${h.to}</span>
+        return;
+      }
+
+      const hist = await res.json();
+
+      if (!hist.length) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🕓</div>
+            <h3>No search history</h3>
+            <p>Your recent route searches will appear here.</p>
+          </div>`;
+        return;
+      }
+
+      list.innerHTML = hist.map(h => `
+        <div class="history-item" style="display:flex;align-items:center;justify-content:space-between;cursor:pointer;">
+          <div style="flex:1;" onclick="viewRoute('${escAttr(h.origin)}','${escAttr(h.destination)}')">
+            <div class="d-flex align-center gap-8">
+              <span style="font-weight:500;">${escHtml(h.origin)}</span>
+              <span class="text-muted">→</span>
+              <span style="font-weight:500;">${escHtml(h.destination)}</span>
+            </div>
+            <div class="text-sm text-muted mt-8">${timeAgo(h.searched_at)}</div>
           </div>
-          <div class="text-sm text-muted mt-8">${timeAgo(h.searchedAt)}</div>
-        </div>
-        <span style="color:var(--text3);">→</span>
-      </div>
-    `).join('');
+          <div style="display:flex;align-items:center;gap:8px;flex-shrink:0;margin-left:12px;">
+            <span style="color:var(--text3);font-size:13px;">→</span>
+            <button
+              class="btn btn-sm btn-ghost"
+              style="padding:2px 8px;font-size:12px;line-height:1.4;"
+              onclick="deleteEntry(${h.id}, this)"
+              title="Remove this entry">✕</button>
+          </div>
+        </div>`).join('');
+
+    } catch (err) {
+      console.error('renderHistory error:', err);
+      list.innerHTML = `<div class="empty-state">
+        <div class="empty-icon">⚠️</div>
+        <h3>Could not load history</h3>
+        <p class="text-sm">Network error. Is the server running?</p>
+      </div>`;
+    }
   }
 
+  /* ── delete one entry ── */
+  async function deleteEntry(id, btn) {
+    btn.disabled = true;
+    try {
+      const res = await fetch(`${API_URL}/history/${id}`, { method: 'DELETE', headers: _authH() });
+      if (!res.ok) { TOAST.show('Could not remove entry.', 'error'); btn.disabled = false; return; }
+      /* Remove just that row from the DOM without a full re-render */
+      btn.closest('.history-item').remove();
+      /* If list is now empty, show empty state */
+      const list = document.getElementById('history-list');
+      if (!list.querySelector('.history-item')) {
+        list.innerHTML = `
+          <div class="empty-state">
+            <div class="empty-icon">🕓</div>
+            <h3>No search history</h3>
+            <p>Your recent route searches will appear here.</p>
+          </div>`;
+      }
+      TOAST.show('Entry removed.');
+    } catch {
+      TOAST.show('Could not remove entry.', 'error');
+      btn.disabled = false;
+    }
+  }
+
+  /* ── clear all history ── */
+  async function clearHistory() {
+    const btn = document.getElementById('clear-history-btn');
+    if (btn) btn.disabled = true;
+    try {
+      const res = await fetch(`${API_URL}/history`, { method: 'DELETE', headers: _authH() });
+      if (!res.ok) { TOAST.show('Could not clear history.', 'error'); if (btn) btn.disabled = false; return; }
+      TOAST.show('History cleared.');
+      renderHistory();
+    } catch {
+      TOAST.show('Could not clear history.', 'error');
+      if (btn) btn.disabled = false;
+    }
+  }
+
+  /* ── helpers ── */
   function viewRoute(from, to) {
     sessionStorage.setItem('wtg_search', JSON.stringify({ from, to }));
     window.location.href = 'result.html';
@@ -150,18 +225,16 @@
 
   async function unsave(routeId) {
     const ok = await USER.unsaveRoute(routeId);
-    if (ok) {
-      TOAST.show('Route removed.');
-      renderSaved();
-    } else {
-      TOAST.show('Could not remove route.', 'error');
-    }
+    if (ok) { TOAST.show('Route removed.'); renderSaved(); }
+    else { TOAST.show('Could not remove route.', 'error'); }
   }
 
-  function clearHistory() {
-    USER.clearHistory();
-    TOAST.show('History cleared.');
-    renderHistory();
+  function escHtml(str) {
+    return String(str ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function escAttr(str) {
+    return String(str ?? '').replace(/'/g, "\\'");
   }
 
   function timeAgo(iso) {

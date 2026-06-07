@@ -1,27 +1,17 @@
 /**
  * setup-database.js — Database Schema Setup + Route Seeding
- * Creates all tables and inserts the route data that was previously
- * hard-coded inside routes.js (ROUTE_DB) into MySQL.
+ *
+ * Creates all tables and inserts the default route data into MySQL.
  *
  * Run once before starting the server:
  *   node setup-database.js
- *
- * FIXES APPLIED:
- *  - BUG FIX 1: users.status ENUM now includes 'restricted' to match
- *    what api/admin.js toggleStatus actually sends. Previously only
- *    'active'|'inactive' were valid, so MySQL silently stored '' when
- *    admin tried to restrict a user — breaking admin moderation.
- *  - BUG FIX 2: comments.route_id column widened from VARCHAR(50)
- *    to VARCHAR(100) to safely accommodate long route IDs.
- *  - Uses ALTER TABLE to fix the ENUM on already-existing databases
- *    so re-running this script upgrades live databases safely.
  */
 
 const mysql  = require('mysql2/promise');
 const bcrypt = require('bcryptjs');
 require('dotenv').config();
 
-/* ─── Route data seeded from the original routes.js ROUTE_DB ─────────── */
+/* ------------------------------------------------------- SEED ROUTES --------------------------------------------------------------------------------------- */
 const SEED_ROUTES = [
   {
     route_id:      'cvsu-ccat_sm-tanza',
@@ -232,7 +222,7 @@ const SEED_ROUTES = [
   }
 ];
 
-/* ─── Main setup function ─────────────────────────────────────────────── */
+/* ------------------------------------------------------- MAIN SETUP FUNCTION --------------------------------------------------------------------------------------- */
 async function setupDatabase() {
   const connection = await mysql.createConnection({
     host:     process.env.DB_HOST     || 'localhost',
@@ -253,9 +243,6 @@ async function setupDatabase() {
     await connection.query(`USE \`${dbName}\``);
 
     // 2. users table
-    // FIX 1: status ENUM now includes 'restricted' so admin can properly
-    // restrict user accounts. The original only had 'active'|'inactive',
-    // causing MySQL to silently store '' when 'restricted' was sent.
     await connection.query(`
       CREATE TABLE IF NOT EXISTS users (
         id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -276,7 +263,7 @@ async function setupDatabase() {
         ALTER TABLE users
         MODIFY COLUMN status ENUM('active','inactive','restricted') DEFAULT 'active'
       `);
-      console.log('✓ users table created / verified (status ENUM includes restricted)');
+      console.log('✓ users table created / verified');
     } catch (alterErr) {
       console.log('✓ users table verified (ALTER skipped or not needed)');
     }
@@ -297,7 +284,7 @@ async function setupDatabase() {
         INDEX (from_location, to_location)
       )
     `);
-    console.log('✓ routes table created / verified (with steps column)');
+    console.log('✓ routes table created / verified');
 
     // 4. saved_routes table
     await connection.query(`
@@ -316,8 +303,6 @@ async function setupDatabase() {
     console.log('✓ saved_routes table created / verified');
 
     // 5. comments table
-    // FIX 2: route_id widened to VARCHAR(100) (was VARCHAR(50)) to safely
-    // store any route ID without truncation risk.
     await connection.query(`
       CREATE TABLE IF NOT EXISTS comments (
         id         INT AUTO_INCREMENT PRIMARY KEY,
@@ -338,7 +323,7 @@ async function setupDatabase() {
         ALTER TABLE comments
         MODIFY COLUMN route_id VARCHAR(100) NOT NULL
       `);
-      console.log('✓ comments table created / verified (route_id is VARCHAR(100))');
+      console.log('✓ comments table created / verified');
     } catch (alterErr) {
       console.log('✓ comments table verified (ALTER skipped or not needed)');
     }

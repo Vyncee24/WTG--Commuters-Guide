@@ -20,7 +20,16 @@ const ROUTES = (() => {
     if (!from.trim() || !to.trim()) return [];
     try {
       const params = new URLSearchParams({ from, to });
-      const res = await fetch(`${API_BASE}/search/smart?${params}`);
+
+      /* Send JWT so the server can record who searched (user_id).
+         AUTH may not be loaded on every page, so we guard defensively. */
+      const headers = {};
+      try {
+        const token = (typeof AUTH !== 'undefined' && AUTH.getToken) ? AUTH.getToken() : null;
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+      } catch (_) {}
+
+      const res = await fetch(`${API_BASE}/search/smart?${params}`, { headers });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const routes = await res.json();
       return routes.map(r => ({
