@@ -121,7 +121,7 @@ a:hover { color: var(--text); }
 }
 .btn-primary:hover { background:  #1f261a; transform: translateY(-1px); box-shadow: var(--shadow-accent); color: #fff; }
 .btn-secondary {
-  background: var(--surface2); color: var(--text);
+  background: var(--accent); color: var(--bg);
   border: 1px solid var(--border2);
 }
 .btn-secondary:hover { background: var(--surface); border-color: var(--border2); color: var(--text); }
@@ -366,7 +366,7 @@ select.form-control { cursor: pointer; }
   display: flex; align-items: center; justify-content: space-between;
   cursor: pointer; transition: all var(--transition);
 }
-.history-item:hover { border-color: var(--border2); background: var(--surface2); }
+.history-item:hover { border-color: var(--border2); background: var(--surface2); color: var(--bg2); }
 
 /* ── Admin Panel ── */
 .admin-layout { 

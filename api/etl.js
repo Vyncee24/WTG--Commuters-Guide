@@ -2,7 +2,7 @@
  * api/etl.js — ETL Pipeline
  *
  * EXTRACT  → Read from OLTP: search_history, saved_routes, comments
- * TRANSFORM → Aggregate per (date, route, user): search_count, save_count, avg_rating
+ * TRANSFORM → Aggregate per (date, route, user): search_count, save_count
  * LOAD     → Full-refresh: DELETE + INSERT into commuter_olap.fact_route_usage
  *
  * Endpoints (admin-only):
@@ -93,18 +93,7 @@ async function runETL() {
        LEFT JOIN wtg_commuters_guide.users u ON u.id = sr.user_id`
     );
 
-    const [ratings] = await conn.query(
-      `SELECT c.route_id,
-              r.from_location AS origin, r.to_location AS destination,
-              DATE(c.created_at) AS rating_date,
-              AVG(c.rating)      AS avg_rating
-       FROM wtg_commuters_guide.comments c
-       JOIN wtg_commuters_guide.routes r ON r.route_id = c.route_id
-       WHERE c.rating IS NOT NULL
-       GROUP BY c.route_id, r.from_location, r.to_location, DATE(c.created_at)`
-    );
-
-    log.push({ step: 'EXTRACT_DONE', searches: searches.length, saves: saves.length, ratingRows: ratings.length });
+    log.push({ step: 'EXTRACT_DONE', searches: searches.length, saves: saves.length });
 
     /* ------------------------------------------------------- TRANSFORM --------------------------------------------------------------------------------------- */
     log.push({ step: 'TRANSFORM', detail: 'aggregating into buckets' });
@@ -118,7 +107,7 @@ async function runETL() {
     function ensureBucket(dateKey, routeId, origin, dest, userId, role) {
       const k = bucketKey(dateKey, routeId, userId);
       if (!buckets[k]) {
-        buckets[k] = { dateKey, routeId, origin, dest, userId, role, searches: 0, saves: 0, ratings: [] };
+        buckets[k] = { dateKey, routeId, origin, dest, userId, role, searches: 0, saves: 0 };
       }
       return buckets[k];
     }
@@ -133,12 +122,6 @@ async function runETL() {
       const dk  = toDateKey(row.save_date);
       const rid = row.route_id || `${row.origin}_${row.destination}`;
       ensureBucket(dk, rid, row.origin, row.destination, row.user_id, row.role).saves += 1;
-    }
-
-    for (const row of ratings) {
-      const dk  = toDateKey(row.rating_date);
-      ensureBucket(dk, row.route_id, row.origin, row.destination, null, 'user')
-        .ratings.push(parseFloat(row.avg_rating));
     }
 
     const bucketList = Object.values(buckets);
@@ -169,19 +152,14 @@ async function runETL() {
           userKey = await upsertDimUser(conn, b.userId, b.role);
         }
 
-        const avgRating = b.ratings.length > 0
-          ? (b.ratings.reduce((s, v) => s + v, 0) / b.ratings.length).toFixed(2)
-          : null;
-
         await conn.query(
           `INSERT INTO commuter_olap.fact_route_usage
-             (date_key, route_key, user_key, search_count, save_count, average_rating)
-           VALUES (?, ?, ?, ?, ?, ?)
+             (date_key, route_key, user_key, search_count, save_count)
+           VALUES (?, ?, ?, ?, ?)
            ON DUPLICATE KEY UPDATE
              search_count   = VALUES(search_count),
-             save_count     = VALUES(save_count),
-             average_rating = VALUES(average_rating)`,
-          [b.dateKey, routeKey, userKey, b.searches, b.saves, avgRating]
+             save_count     = VALUES(save_count)`,
+          [b.dateKey, routeKey, userKey, b.searches, b.saves]
         );
         loaded++;
       }

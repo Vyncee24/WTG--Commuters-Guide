@@ -22,10 +22,7 @@
     .etl-status     { font-size:13px; color:var(--text2); padding:12px 16px; background:var(--bg2); border-radius:var(--radius); margin-top:12px; white-space:pre-wrap; max-height:200px; overflow-y:auto; }
     .tab-bar        { display:flex; gap:4px; border-bottom:1px solid var(--border); margin-bottom:20px; }
     .tab-btn        { padding:8px 16px; border:none; background:none; cursor:pointer; font-size:14px; color:var(--text2); border-bottom:2px solid transparent; margin-bottom:-1px; }
-    .tab-btn.active { color:var(--accent); border-bottom-color:var(--accent); font-weight:600; }
-    .star-bar       { display:flex; align-items:center; gap:8px; margin:4px 0; }
-    .star-bar-fill  { height:8px; background:var(--accent); border-radius:4px; min-width:4px; }
-    .star-bar-bg    { flex:1; height:8px; background:var(--border); border-radius:4px; overflow:hidden; }
+    .tab-btn.active { color:var(--bg2); border-bottom-color:var(--bg2); font-weight:600; }
   </style>
 </head>
 <body>
@@ -54,16 +51,16 @@
       <img src="visuals/chat-bubble.png" alt="" width="30px" style="margin-right:15px;"> Comments
     </div>
     <div class="admin-nav-item" data-section="routes" onclick="ADMIN.navigate('routes')">
-      <img src="visuals/maps.png" alt="" width="30px" style="margin-right:15px;"> Routes
+      <img src="visuals/pin.png" alt="" width="30px" style="margin-right:15px;"> Routes
     </div>
     <div class="admin-nav-item" data-section="analytics" onclick="ADMIN.navigate('analytics')">
-      <span style="font-size:20px;margin-right:15px;">📊</span> Analytics
+      <img src="visuals/data-analytics.png" alt="" width="30px" style="margin-right:15px;"> Analytics
     </div>
     <div class="admin-nav-item" data-section="reports" onclick="ADMIN.navigate('reports')">
-      <span style="font-size:20px;margin-right:15px;">📄</span> Reports
+      <img src="visuals/report.png" alt="" width="30px" style="margin-right:15px;">Reports
     </div>
     <div class="admin-nav-item" data-section="etl" onclick="ADMIN.navigate('etl')">
-      <span style="font-size:20px;margin-right:15px;">⚙️</span> ETL
+      <img src="visuals/sd-card.png" alt="" width="30px" style="margin-right:15px;"> ETL
     </div>
   </aside>
 
@@ -98,11 +95,12 @@
         <h3 style="margin-bottom:4px;">Quick Actions</h3>
         <p class="text-sm mt-8" style="margin-bottom:16px;">Jump to common tasks</p>
         <div style="display:flex;gap:10px;flex-wrap:wrap;">
-          <button class="btn btn-secondary" onclick="ADMIN.navigate('users')">👥 Manage Users</button>
-          <button class="btn btn-secondary" onclick="ADMIN.navigate('comments')">💬 Moderate Comments</button>
-          <button class="btn btn-secondary" onclick="ADMIN.navigate('routes')">🗺 Manage Routes</button>
-          <button class="btn btn-secondary" onclick="ADMIN.navigate('analytics')">📊 View Analytics</button>
-          <button class="btn btn-secondary" onclick="ADMIN.navigate('etl')">⚙️ Run ETL</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('users')">Manage Users</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('comments')">Moderate Comments</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('routes')">Manage Routes</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('analytics')">View Analytics</button>
+          <button class="btn btn-secondary" onclick="ADMIN.navigate('etl')">Run ETL</button>
+          <button class="btn btn-secondary" onclick="ADMIN.downloadSQL()">⬇ Download Database (.sql)</button>
         </div>
       </div>
 
@@ -195,7 +193,6 @@
         <button class="tab-btn active" onclick="ADMIN.analyticsTab('most-searched',this)">Most Searched</button>
         <button class="tab-btn" onclick="ADMIN.analyticsTab('destinations',this)">Destinations</button>
         <button class="tab-btn" onclick="ADMIN.analyticsTab('most-saved',this)">Most Saved</button>
-        <button class="tab-btn" onclick="ADMIN.analyticsTab('top-rated',this)">Top Rated</button>
         <button class="tab-btn" onclick="ADMIN.analyticsTab('trend',this)">Trend</button>
         <button class="tab-btn" onclick="ADMIN.analyticsTab('olap',this)">OLAP Queries</button>
       </div>
@@ -217,13 +214,6 @@
       <!-- Most Saved -->
       <div class="analytics-tab-panel hidden" id="atab-most-saved">
         <div id="an-most-saved-container">
-          <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
-        </div>
-      </div>
-
-      <!-- Top Rated -->
-      <div class="analytics-tab-panel hidden" id="atab-top-rated">
-        <div id="an-top-rated-container">
           <div class="empty-state"><div class="empty-icon">⏳</div><p>Loading…</p></div>
         </div>
       </div>
@@ -269,7 +259,6 @@
           <div class="filter-row">
             <div><label>Destination</label><input class="form-control" id="olap-dice-dest" placeholder="SM Tanza" style="width:160px;"/></div>
             <div><label>Month</label><input class="form-control" id="olap-dice-month" type="number" placeholder="6" min="1" max="12" style="width:90px;"/></div>
-            <div><label>Min Rating</label><input class="form-control" id="olap-dice-rating" type="number" placeholder="4" min="1" max="5" step="0.1" style="width:100px;"/></div>
             <button class="btn btn-secondary" onclick="ADMIN.runDice()">Run Dice</button>
           </div>
           <div id="olap-dice-result"></div>
@@ -285,7 +274,6 @@
       <div class="tab-bar">
         <button class="tab-btn active" onclick="ADMIN.reportTab('route-usage',this)">Route Usage</button>
         <button class="tab-btn" onclick="ADMIN.reportTab('route-popularity',this)">Popularity</button>
-        <button class="tab-btn" onclick="ADMIN.reportTab('route-ratings',this)">Ratings</button>
       </div>
 
       <!-- Filters -->
@@ -320,7 +308,7 @@
         <h4 style="margin-bottom:4px;">ETL Process</h4>
         <ol style="color:var(--text2);font-size:14px;line-height:1.8;padding-left:20px;margin:12px 0;">
           <li><strong>EXTRACT</strong> — reads <code>search_history</code>, <code>saved_routes</code>, <code>comments</code> from OLTP</li>
-          <li><strong>TRANSFORM</strong> — aggregates per (date, route, user): search_count, save_count, avg_rating</li>
+          <li><strong>TRANSFORM</strong> — aggregates per (date, route, user): search_count, save_count</li>
           <li><strong>LOAD</strong> — upserts aggregated rows into <code>commuter_olap.fact_route_usage</code></li>
         </ol>
         <div style="display:flex;gap:10px;margin-top:16px;align-items:center;">

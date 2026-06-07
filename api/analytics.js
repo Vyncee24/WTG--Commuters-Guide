@@ -9,12 +9,11 @@
  *   GET /api/analytics/most-searched    — top searched routes
  *   GET /api/analytics/destinations     — most popular destinations
  *   GET /api/analytics/most-saved       — most saved routes
- *   GET /api/analytics/top-rated        — top rated routes
  *   GET /api/analytics/trend            — search count by day (last 30 days)
  *   GET /api/analytics/rollup           — roll-up: day→month→year
  *   GET /api/analytics/drilldown        — drill-down: year→month→day
  *   GET /api/analytics/slice            — slice by destination
- *   GET /api/analytics/dice             — dice: destination+month+min_rating
+ *   GET /api/analytics/dice             — dice: destination+month
  */
 
 const express = require('express');
@@ -127,29 +126,6 @@ router.get('/most-saved', verifyAdmin, async (req, res) => {
   }
 });
 
-/* GET /api/analytics/top-rated?limit=10 — highest average rating */
-router.get('/top-rated', verifyAdmin, async (req, res) => {
-  try {
-    const limit = Math.min(parseInt(req.query.limit) || 10, 50);
-    const [rows] = await pool.query(
-      `SELECT r.route_id, r.origin, r.destination,
-              ROUND(AVG(f.average_rating), 2) AS avg_rating,
-              SUM(f.search_count) AS total_searches
-       FROM commuter_olap.fact_route_usage f
-       JOIN commuter_olap.dim_route r ON r.route_key = f.route_key
-       WHERE f.average_rating IS NOT NULL
-       GROUP BY r.route_key
-       ORDER BY avg_rating DESC
-       LIMIT ?`,
-      [limit]
-    );
-    res.json(rows);
-  } catch (err) {
-    console.error('[analytics/top-rated]', err);
-    res.status(500).json({ error: 'Server error' });
-  }
-});
-
 /* GET /api/analytics/trend?days=30 — daily search count trend */
 router.get('/trend', verifyAdmin, async (req, res) => {
   try {
@@ -185,8 +161,7 @@ router.get('/rollup', verifyAdmin, async (req, res) => {
     const [rows] = await pool.query(
       `SELECT d.year, d.month, d.day,
               SUM(f.search_count) AS total_searches,
-              SUM(f.save_count)   AS total_saves,
-              ROUND(AVG(f.average_rating),2) AS avg_rating
+              SUM(f.save_count)   AS total_saves
        FROM commuter_olap.fact_route_usage f
        JOIN commuter_olap.dim_date  d ON d.date_key  = f.date_key
        JOIN commuter_olap.dim_route r ON r.route_key = f.route_key
@@ -241,8 +216,7 @@ router.get('/drilldown', verifyAdmin, async (req, res) => {
     const [rows] = await pool.query(
       `SELECT ${selectFields},
               SUM(f.search_count) AS total_searches,
-              SUM(f.save_count)   AS total_saves,
-              ROUND(AVG(f.average_rating),2) AS avg_rating
+              SUM(f.save_count)   AS total_saves
        FROM commuter_olap.fact_route_usage f
        JOIN commuter_olap.dim_date  d ON d.date_key  = f.date_key
        JOIN commuter_olap.dim_route r ON r.route_key = f.route_key
@@ -271,7 +245,7 @@ router.get('/slice', verifyAdmin, async (req, res) => {
 
     const [rows] = await pool.query(
       `SELECT r.origin, r.destination, d.full_date,
-              f.search_count, f.save_count, f.average_rating
+              f.search_count, f.save_count
        FROM commuter_olap.fact_route_usage f
        JOIN commuter_olap.dim_route r ON r.route_key = f.route_key
        JOIN commuter_olap.dim_date  d ON d.date_key  = f.date_key
@@ -288,32 +262,30 @@ router.get('/slice', verifyAdmin, async (req, res) => {
   }
 });
 
-/* GET /api/analytics/dice?destination=SM%20Tanza&month=6&min_rating=4 — dice */
+/* GET /api/analytics/dice?destination=SM%20Tanza&month=6 — dice */
 router.get('/dice', verifyAdmin, async (req, res) => {
   try {
-    const { destination, month, min_rating } = req.query;
+    const { destination, month } = req.query;
     const conditions = ['1=1'];
     const params = [];
 
     if (destination) { conditions.push('r.destination = ?');       params.push(destination); }
     if (month)       { conditions.push('d.month = ?');             params.push(parseInt(month)); }
-    if (min_rating)  { conditions.push('f.average_rating >= ?');   params.push(parseFloat(min_rating)); }
 
     const [rows] = await pool.query(
       `SELECT r.origin, r.destination, d.year, d.month,
               SUM(f.search_count)            AS total_searches,
-              SUM(f.save_count)              AS total_saves,
-              ROUND(AVG(f.average_rating),2) AS avg_rating
+              SUM(f.save_count)              AS total_saves
        FROM commuter_olap.fact_route_usage f
        JOIN commuter_olap.dim_route r ON r.route_key = f.route_key
        JOIN commuter_olap.dim_date  d ON d.date_key  = f.date_key
        WHERE ${conditions.join(' AND ')}
        GROUP BY r.route_key, d.year, d.month
-       ORDER BY avg_rating DESC, total_searches DESC`,
+       ORDER BY total_searches DESC`,
       params
     );
 
-    res.json({ dice: { destination, month, min_rating }, rows });
+    res.json({ dice: { destination, month }, rows });
   } catch (err) {
     console.error('[analytics/dice]', err);
     res.status(500).json({ error: 'Server error' });

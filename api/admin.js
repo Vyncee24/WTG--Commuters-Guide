@@ -137,4 +137,82 @@ router.delete('/comments/:id', verifyAdmin, async (req, res) => {
   }
 });
 
+
+/* ------------------------------------------------------- GET /API/ADMIN/EXPORT-SQL --------------------------------------------------------------------------------------- */
+/* Generates a .sql dump of wtg_commuters_guide using pure Node/MySQL queries (no mysqldump needed) */
+router.get('/export-sql', verifyAdmin, async (req, res) => {
+  try {
+    const TABLES = ['users', 'routes', 'saved_routes', 'comments', 'search_history'];
+    const lines = [];
+
+    lines.push('-- =============================================================================');
+    lines.push('-- WTG: Commuters Guide — Live Database Export');
+    lines.push(`-- Generated: ${new Date().toISOString()}`);
+    lines.push('-- Import: mysql -u root -p < database.sql');
+    lines.push('-- =============================================================================');
+    lines.push('');
+    lines.push('SET NAMES utf8mb4;');
+    lines.push('SET FOREIGN_KEY_CHECKS = 0;');
+    lines.push('');
+
+    for (const table of TABLES) {
+      // Get CREATE TABLE statement
+      let createSql = '';
+      try {
+        const [[showRow]] = await pool.query(`SHOW CREATE TABLE \`${table}\``);
+        createSql = showRow['Create Table'];
+      } catch {
+        continue; // table may not exist yet (e.g. search_history)
+      }
+
+      lines.push(`-- -----------------------------------------------------------------------------`);
+      lines.push(`-- TABLE: ${table}`);
+      lines.push(`-- -----------------------------------------------------------------------------`);
+      lines.push(`DROP TABLE IF EXISTS \`${table}\`;`);
+      lines.push(createSql + ';');
+      lines.push('');
+
+      // Get rows
+      const [rows] = await pool.query(`SELECT * FROM \`${table}\``);
+      if (rows.length === 0) continue;
+
+      const cols = Object.keys(rows[0]);
+      const colList = cols.map(c => `\`${c}\``).join(', ');
+
+      const escapeVal = (v) => {
+        if (v === null || v === undefined) return 'NULL';
+        if (typeof v === 'number' || typeof v === 'bigint') return String(v);
+        if (v instanceof Date) return `'${v.toISOString().slice(0, 19).replace('T', ' ')}'`;
+        return "'" + String(v).replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/\n/g, '\\n').replace(/\r/g, '\\r') + "'";
+      };
+
+      // Batch inserts of 50 rows each
+      for (let i = 0; i < rows.length; i += 50) {
+        const batch = rows.slice(i, i + 50);
+        const values = batch.map(row =>
+          '(' + cols.map(c => escapeVal(row[c])).join(', ') + ')'
+        ).join(',\n  ');
+        lines.push(`INSERT INTO \`${table}\` (${colList}) VALUES`);
+        lines.push(`  ${values};`);
+        lines.push('');
+      }
+    }
+
+    lines.push('SET FOREIGN_KEY_CHECKS = 1;');
+    lines.push('');
+    lines.push(`-- Export complete: ${new Date().toISOString()}`);
+
+    const sql = lines.join('\n');
+    const fname = `wtg_commuters_guide_${new Date().toISOString().slice(0, 10)}.sql`;
+
+    res.setHeader('Content-Type', 'application/sql');
+    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+    res.send(sql);
+
+  } catch (err) {
+    console.error('Export SQL error:', err);
+    res.status(500).json({ error: 'Failed to generate SQL export: ' + err.message });
+  }
+});
+
 module.exports = router;

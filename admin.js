@@ -105,7 +105,7 @@ const ADMIN = (() => {
         const label   = `${escHtml(r.from_location)} → ${escHtml(r.to_location)}`;
         /* Gradient from accent blue → lighter on lower bars */
         const opacity = 0.45 + (count / maxCount) * 0.55;
-        const color   = `rgba(37, 99, 235, ${opacity.toFixed(2)})`;
+        const color   = `rgba(94, 105, 78, ${opacity.toFixed(2)})`;
 
         return `
           <div style="margin-bottom:12px;">
@@ -148,7 +148,7 @@ const ADMIN = (() => {
           <td style="color:var(--text2);">${escHtml(u.email)}</td>
           <td>${formatDate(u.created_at)}</td>
           <td>${u.saved_count??0} saved · ${u.comment_count??0} comments</td>
-          <td><span class="badge ${u.status==='active'?'badge-green':'badge-red'}">${u.status==='active'?'● Active':'⊘ Restricted'}</span></td>
+          <td><span class="badge ${u.status==='active'?'badge-green':'badge-red'}">${u.status==='active'?'Active':'Restricted'}</span></td>
           <td><div class="user-actions">
             <button class="btn btn-sm btn-secondary" onclick="ADMIN.openEditModal(${u.id})">Edit</button>
             <button class="btn btn-sm btn-secondary" onclick="ADMIN.toggleStatus(${u.id},'${u.status}')">${u.status==='active'?'Restrict':'Activate'}</button>
@@ -247,8 +247,6 @@ const ADMIN = (() => {
       ['Destination','Total Searches'], r=>[r.destination, r.total_searches]);
     if (tab === 'most-saved')    await loadAnalyticsTable('most-saved',    'an-most-saved-container',
       ['Route ID','From','To','Total Saves'], r=>[r.route_id, r.origin, r.destination, r.total_saves]);
-    if (tab === 'top-rated')     await loadAnalyticsTable('top-rated',     'an-top-rated-container',
-      ['Route ID','From','To','Avg Rating','Searches'], r=>[r.route_id, r.origin, r.destination, r.avg_rating, r.total_searches]);
     if (tab === 'trend')         await loadTrend();
   }
 
@@ -312,11 +310,11 @@ const ADMIN = (() => {
       const rows = await res.json();
       if (!rows.length) { c.innerHTML = '<p style="color:var(--text3)">No data.</p>'; return; }
       c.innerHTML = `<div style="overflow-x:auto;"><table class="report-table">
-        <thead><tr><th>Level</th><th>Year</th><th>Month</th><th>Day</th><th>Searches</th><th>Saves</th><th>Avg Rating</th></tr></thead>
+        <thead><tr><th>Level</th><th>Year</th><th>Month</th><th>Day</th><th>Searches</th><th>Saves</th></tr></thead>
         <tbody>${rows.map(r=>`<tr style="${r.level==='grand_total'?'font-weight:700;background:var(--bg2);':r.level==='year'?'font-weight:600;':r.level==='month'?'font-style:italic;':''}">
           <td><span class="badge badge-${r.level==='grand_total'?'blue':r.level==='year'?'green':r.level==='month'?'gray':''}">${r.level}</span></td>
           <td>${r.year??'—'}</td><td>${r.month??'—'}</td><td>${r.day??'—'}</td>
-          <td>${r.total_searches??0}</td><td>${r.total_saves??0}</td><td>${r.avg_rating??'—'}</td>
+          <td>${r.total_searches??0}</td><td>${r.total_saves??0}</td>
         </tr>`).join('')}</tbody></table></div>`;
     } catch (err) { c.innerHTML = `<p style="color:var(--red)">${escHtml(err.message)}</p>`; }
   }
@@ -358,20 +356,18 @@ const ADMIN = (() => {
       const rows = data.rows || [];
       if (!rows.length) { c.innerHTML = `<p style="color:var(--text3)">No data for destination "${escHtml(dest)}".</p>`; return; }
       c.innerHTML = `<div style="overflow-x:auto;"><table class="report-table">
-        <thead><tr><th>Origin</th><th>Destination</th><th>Date</th><th>Searches</th><th>Saves</th><th>Avg Rating</th></tr></thead>
-        <tbody>${rows.map(r=>`<tr><td>${escHtml(r.origin)}</td><td>${escHtml(r.destination)}</td><td>${r.full_date?new Date(r.full_date).toLocaleDateString():'—'}</td><td>${r.search_count??0}</td><td>${r.save_count??0}</td><td>${r.average_rating??'—'}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>Origin</th><th>Destination</th><th>Date</th><th>Searches</th><th>Saves</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr><td>${escHtml(r.origin)}</td><td>${escHtml(r.destination)}</td><td>${r.full_date?new Date(r.full_date).toLocaleDateString():'—'}</td><td>${r.search_count??0}</td><td>${r.save_count??0}</td></tr>`).join('')}</tbody>
         </table></div>`;
     } catch (err) { c.innerHTML = `<p style="color:var(--red)">${escHtml(err.message)}</p>`; }
   }
 
   async function runDice() {
-    const dest   = document.getElementById('olap-dice-dest')?.value.trim();
-    const month  = document.getElementById('olap-dice-month')?.value.trim();
-    const rating = document.getElementById('olap-dice-rating')?.value.trim();
+    const dest  = document.getElementById('olap-dice-dest')?.value.trim();
+    const month = document.getElementById('olap-dice-month')?.value.trim();
     const params = new URLSearchParams();
-    if (dest)   params.append('destination', dest);
-    if (month)  params.append('month', month);
-    if (rating) params.append('min_rating', rating);
+    if (dest)  params.append('destination', dest);
+    if (month) params.append('month', month);
     const c = document.getElementById('olap-dice-result');
     c.innerHTML = '<p style="color:var(--text3);">Running…</p>';
     try {
@@ -380,8 +376,8 @@ const ADMIN = (() => {
       const rows = data.rows || [];
       if (!rows.length) { c.innerHTML = '<p style="color:var(--text3)">No data matches these dice filters.</p>'; return; }
       c.innerHTML = `<div style="overflow-x:auto;"><table class="report-table">
-        <thead><tr><th>Origin</th><th>Destination</th><th>Year</th><th>Month</th><th>Searches</th><th>Saves</th><th>Avg Rating</th></tr></thead>
-        <tbody>${rows.map(r=>`<tr><td>${escHtml(r.origin)}</td><td>${escHtml(r.destination)}</td><td>${r.year??'—'}</td><td>${r.month??'—'}</td><td>${r.total_searches??0}</td><td>${r.total_saves??0}</td><td>${r.avg_rating??'—'}</td></tr>`).join('')}</tbody>
+        <thead><tr><th>Origin</th><th>Destination</th><th>Year</th><th>Month</th><th>Searches</th><th>Saves</th></tr></thead>
+        <tbody>${rows.map(r=>`<tr><td>${escHtml(r.origin)}</td><td>${escHtml(r.destination)}</td><td>${r.year??'—'}</td><td>${r.month??'—'}</td><td>${r.total_searches??0}</td><td>${r.total_saves??0}</td></tr>`).join('')}</tbody>
         </table></div>`;
     } catch (err) { c.innerHTML = `<p style="color:var(--red)">${escHtml(err.message)}</p>`; }
   }
@@ -475,6 +471,29 @@ const ADMIN = (() => {
       status.textContent = JSON.stringify(data, null, 2);
     } catch (err) {
       status.textContent = 'Could not fetch ETL status: ' + err.message;
+    }
+  }
+
+  /* ------------------------------------------------------- DOWNLOAD SQL --------------------------------------------------------------------------------------- */
+  async function downloadSQL() {
+    const token = AUTH.getToken();
+    const base = (window.location.protocol === 'file:') ? 'http://localhost:5000' : window.location.origin;
+    try {
+      const res = await fetch(`${base}/api/admin/export-sql`, {
+        headers: { 'Authorization': `Bearer ${token}` }
+      });
+      if (!res.ok) { TOAST.show('Export failed: ' + res.status, 'error'); return; }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'wtg_database.sql';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } catch (err) {
+      TOAST.show('Could not download SQL: ' + err.message, 'error');
     }
   }
 
@@ -718,6 +737,7 @@ const ADMIN = (() => {
     renderAnalytics, analyticsTab, runRollup, runDrilldown, runSlice, runDice,
     loadReport, reportTab, exportReport,
     runETL, checkETLStatus,
+    downloadSQL,
     toggleStatus, confirmDelete, closeDeleteModal, doDelete,
     openEditModal, closeEditModal, saveEdit,
     deleteComment,

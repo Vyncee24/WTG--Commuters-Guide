@@ -7,8 +7,7 @@
  * Endpoints (admin-only):
  *   GET /api/reports/route-usage       — route usage data
  *   GET /api/reports/route-popularity  — popularity ranking
- *   GET /api/reports/route-ratings     — ratings report
- *   GET /api/reports/export/csv?report=route-usage|route-popularity|route-ratings
+ *   GET /api/reports/export/csv?report=route-usage|route-popularity
  *   GET /api/reports/export/excel?report=...
  *   GET /api/reports/export/pdf?report=...
  */
@@ -21,7 +20,7 @@ const jwt     = require('jsonwebtoken');
 /* ------------------------------------------------------- ADMIN-ONLY MIDDLEWARE --------------------------------------------------------------------------------------- */
 function verifyAdmin(req, res, next) {
   const header = req.headers.authorization || '';
-  const token  = header.startsWith('Bearer ') ? header.slice(7) : null;
+  const token  = header.startsWith('Bearer ') ? header.slice(7) : (req.query._token || null);
   if (!token) return res.status(401).json({ error: 'No token provided' });
   try {
     const decoded = jwt.verify(token, process.env.JWT_SECRET);
@@ -46,8 +45,7 @@ async function fetchRouteUsage(filters = {}) {
     `SELECT r.route_id, r.origin, r.destination,
             d.full_date,
             SUM(f.search_count) AS searches,
-            SUM(f.save_count)   AS saves,
-            ROUND(AVG(f.average_rating),2) AS avg_rating
+            SUM(f.save_count)   AS saves
      FROM commuter_olap.fact_route_usage f
      JOIN commuter_olap.dim_route r ON r.route_key = f.route_key
      JOIN commuter_olap.dim_date  d ON d.date_key  = f.date_key
@@ -69,7 +67,6 @@ async function fetchRoutePopularity(filters = {}) {
     `SELECT r.route_id, r.origin, r.destination,
             SUM(f.search_count) AS total_searches,
             SUM(f.save_count)   AS total_saves,
-            ROUND(AVG(f.average_rating),2) AS avg_rating,
             RANK() OVER (ORDER BY SUM(f.search_count) DESC) AS popularity_rank
      FROM commuter_olap.fact_route_usage f
      JOIN commuter_olap.dim_route r ON r.route_key = f.route_key
@@ -83,37 +80,10 @@ async function fetchRoutePopularity(filters = {}) {
   return rows;
 }
 
-async function fetchRouteRatings(filters = {}) {
-  const conditions = ["c.rating IS NOT NULL"];
-  const params = [];
-  if (filters.route_id)    { conditions.push('c.route_id = ?');      params.push(filters.route_id); }
-  if (filters.destination) { conditions.push('r.to_location = ?');   params.push(filters.destination); }
-
-  const [rows] = await pool.query(
-    `SELECT c.route_id, r.from_location AS origin, r.to_location AS destination,
-            COUNT(c.id)          AS total_ratings,
-            ROUND(AVG(c.rating),2) AS avg_rating,
-            MIN(c.rating)        AS min_rating,
-            MAX(c.rating)        AS max_rating,
-            SUM(CASE WHEN c.rating = 5 THEN 1 ELSE 0 END) AS five_star,
-            SUM(CASE WHEN c.rating = 4 THEN 1 ELSE 0 END) AS four_star,
-            SUM(CASE WHEN c.rating = 3 THEN 1 ELSE 0 END) AS three_star,
-            SUM(CASE WHEN c.rating = 2 THEN 1 ELSE 0 END) AS two_star,
-            SUM(CASE WHEN c.rating = 1 THEN 1 ELSE 0 END) AS one_star
-     FROM wtg_commuters_guide.comments c
-     JOIN wtg_commuters_guide.routes r ON r.route_id = c.route_id
-     WHERE ${conditions.join(' AND ')}
-     GROUP BY c.route_id, r.from_location, r.to_location
-     ORDER BY avg_rating DESC`,
-    params
-  );
-  return rows;
-}
 
 const REPORT_MAP = {
   'route-usage':       { fetch: fetchRouteUsage,       title: 'Route Usage Report' },
-  'route-popularity':  { fetch: fetchRoutePopularity,  title: 'Route Popularity Report' },
-  'route-ratings':     { fetch: fetchRouteRatings,     title: 'Route Ratings Report' }
+  'route-popularity':  { fetch: fetchRoutePopularity,  title: 'Route Popularity Report' }
 };
 
 /* ------------------------------------------------------- JSON ENDPOINTS --------------------------------------------------------------------------------------- */
@@ -128,166 +98,296 @@ router.get('/route-popularity', verifyAdmin, async (req, res) => {
   catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-router.get('/route-ratings', verifyAdmin, async (req, res) => {
-  try { res.json(await fetchRouteRatings(req.query)); }
-  catch (err) { res.status(500).json({ error: err.message }); }
-});
 
-/* ------------------------------------------------------- CSV EXPORT --------------------------------------------------------------------------------------- */
+/* ------------------------------------------------------- VALUE FORMATTER --------------------------------------------------------------------------------------- */
 
-function toCSV(rows) {
-  if (!rows.length) return '';
-  const headers = Object.keys(rows[0]);
-  const escape  = (v) => {
+  /* Cleans up values before output: formats Date objects, trims null/undefined */
+  function formatVal(v) {
     if (v == null) return '';
-    const s = String(v);
-    return s.includes(',') || s.includes('"') || s.includes('\n')
-      ? `"${s.replace(/"/g, '""')}"` : s;
-  };
-  return [
-    headers.join(','),
-    ...rows.map(r => headers.map(h => escape(r[h])).join(','))
-  ].join('\r\n');
-}
-
-router.get('/export/csv', verifyAdmin, async (req, res) => {
-  const report = req.query.report || 'route-usage';
-  const def = REPORT_MAP[report];
-  if (!def) return res.status(400).json({ error: 'Unknown report. Use: route-usage, route-popularity, route-ratings' });
-
-  try {
-    const rows = await def.fetch(req.query);
-    const csv  = toCSV(rows);
-    const fname = `${report}-${new Date().toISOString().slice(0,10)}.csv`;
-    res.setHeader('Content-Type', 'text/csv');
-    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
-    res.send(csv);
-  } catch (err) {
-    res.status(500).json({ error: err.message });
+    if (v instanceof Date) {
+      /* Format as YYYY-MM-DD */
+      const y  = v.getFullYear();
+      const mo = String(v.getMonth() + 1).padStart(2, '0');
+      const d  = String(v.getDate()).padStart(2, '0');
+      return `${y}-${mo}-${d}`;
+    }
+    /* MySQL sometimes returns date strings — strip timezone suffix */
+    if (typeof v === 'string' && /\d{4}-\d{2}-\d{2}T/.test(v)) {
+      return v.slice(0, 10);
+    }
+    return v;
   }
-});
 
-/* ------------------------------------------------------- EXCEL EXPORT --------------------------------------------------------------------------------------- */
-
-router.get('/export/excel', verifyAdmin, async (req, res) => {
-  const report = req.query.report || 'route-usage';
-  const def = REPORT_MAP[report];
-  if (!def) return res.status(400).json({ error: 'Unknown report' });
-
-  try {
-    const ExcelJS = require('exceljs');
-    const rows = await def.fetch(req.query);
-    const wb   = new ExcelJS.Workbook();
-    wb.creator  = 'WTG Commuters Guide';
-    wb.created  = new Date();
-    const ws    = wb.addWorksheet(def.title);
-
-    if (rows.length > 0) {
-      const headers = Object.keys(rows[0]);
-      ws.columns = headers.map(h => ({
-        header: h.replace(/_/g,' ').replace(/\b\w/g, c => c.toUpperCase()),
-        key: h,
-        width: Math.max(h.length + 4, 16)
-      }));
-
-      /* Style header row */
-      ws.getRow(1).eachCell(cell => {
-        cell.fill   = { type: 'pattern', pattern: 'solid', fgColor: { argb: 'FF2563EB' } };
-        cell.font   = { bold: true, color: { argb: 'FFFFFFFF' } };
-        cell.border = { bottom: { style: 'thin' } };
-      });
-
-      rows.forEach(r => ws.addRow(r));
-
-      /* Auto-filter */
-      ws.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + headers.length)}1` };
-    } else {
-      ws.addRow(['No data found']);
-    }
-
-    const fname = `${report}-${new Date().toISOString().slice(0,10)}.xlsx`;
-    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
-    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
-    await wb.xlsx.write(res);
-    res.end();
-  } catch (err) {
-    if (err.code === 'MODULE_NOT_FOUND') {
-      return res.status(500).json({ error: 'exceljs not installed. Run: npm install exceljs' });
-    }
-    res.status(500).json({ error: err.message });
+  /* Pretty column header: snake_case → Title Case */
+  function prettyHeader(h) {
+    return h.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
   }
-});
 
-/* ------------------------------------------------------- PDF EXPORT --------------------------------------------------------------------------------------- */
+  /* Determine if a column key is numeric (for alignment) */
+  function isNumericKey(h) {
+    return /count|searches|saves|rating|rank|star|total|avg|min|max/i.test(h);
+  }
 
-router.get('/export/pdf', verifyAdmin, async (req, res) => {
-  const report = req.query.report || 'route-usage';
-  const def = REPORT_MAP[report];
-  if (!def) return res.status(400).json({ error: 'Unknown report' });
+  /* ------------------------------------------------------- CSV EXPORT --------------------------------------------------------------------------------------- */
 
-  try {
-    const PDFDocument = require('pdfkit');
-    const rows = await def.fetch(req.query);
-    const fname = `${report}-${new Date().toISOString().slice(0,10)}.pdf`;
-
-    res.setHeader('Content-Type', 'application/pdf');
-    res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
-
-    const doc = new PDFDocument({ margin: 40, size: 'A4', layout: 'landscape' });
-    doc.pipe(res);
-
-    /* Title */
-    doc.fontSize(18).font('Helvetica-Bold').text(def.title, { align: 'center' });
-    doc.fontSize(10).font('Helvetica').fillColor('#666')
-       .text(`Generated: ${new Date().toLocaleString()}  |  WTG Commuters Guide`, { align: 'center' });
-    doc.moveDown(1);
-
-    if (!rows.length) {
-      doc.fontSize(12).fillColor('#333').text('No data found for the selected filters.');
-      doc.end();
-      return;
-    }
-
+  function toCSV(rows) {
+    if (!rows.length) return '';
     const headers = Object.keys(rows[0]);
-    const pageW   = doc.page.width - 80;
-    const colW    = Math.floor(pageW / headers.length);
-    let   y       = doc.y;
-
-    /* Draw header row */
-    doc.rect(40, y, pageW, 20).fill('#2563EB');
-    headers.forEach((h, i) => {
-      doc.fillColor('#fff').fontSize(8).font('Helvetica-Bold')
-         .text(h.replace(/_/g,' ').toUpperCase(), 40 + i * colW + 2, y + 5, { width: colW - 4, ellipsis: true });
-    });
-    y += 22;
-
-    /* Draw data rows */
-    rows.slice(0, 200).forEach((row, ri) => {
-      if (y + 18 > doc.page.height - 60) {
-        doc.addPage({ layout: 'landscape' });
-        y = 40;
-      }
-      if (ri % 2 === 0) doc.rect(40, y - 2, pageW, 18).fill('#F3F4F6');
-      headers.forEach((h, i) => {
-        const val = row[h] != null ? String(row[h]) : '';
-        doc.fillColor('#111').fontSize(7).font('Helvetica')
-           .text(val, 40 + i * colW + 2, y + 2, { width: colW - 4, ellipsis: true });
-      });
-      y += 18;
-    });
-
-    if (rows.length > 200) {
-      doc.moveDown().fontSize(9).fillColor('#666')
-         .text(`Note: Showing first 200 of ${rows.length} rows. Use CSV/Excel export for full data.`);
-    }
-
-    doc.end();
-  } catch (err) {
-    if (err.code === 'MODULE_NOT_FOUND') {
-      return res.status(500).json({ error: 'pdfkit not installed. Run: npm install pdfkit' });
-    }
-    res.status(500).json({ error: err.message });
+    const escape  = (v) => {
+      const s = String(formatVal(v));
+      return s.includes(',') || s.includes('"') || s.includes('\n')
+        ? `"${s.replace(/"/g, '""')}"` : s;
+    };
+    return [
+      headers.map(prettyHeader).join(','),
+      ...rows.map(r => headers.map(h => escape(r[h])).join(','))
+    ].join('\r\n');
   }
-});
 
-module.exports = router;
+  router.get('/export/csv', verifyAdmin, async (req, res) => {
+    const report = req.query.report || 'route-usage';
+    const def = REPORT_MAP[report];
+    if (!def) return res.status(400).json({ error: 'Unknown report. Use: route-usage or route-popularity' });
+
+    try {
+      const rows = await def.fetch(req.query);
+      const csv  = toCSV(rows);
+      const fname = `${report}-${new Date().toISOString().slice(0,10)}.csv`;
+      res.setHeader('Content-Type', 'text/csv');
+      res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+      res.send(csv);
+    } catch (err) {
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  /* ------------------------------------------------------- EXCEL EXPORT --------------------------------------------------------------------------------------- */
+
+  router.get('/export/excel', verifyAdmin, async (req, res) => {
+    const report = req.query.report || 'route-usage';
+    const def = REPORT_MAP[report];
+    if (!def) return res.status(400).json({ error: 'Unknown report' });
+
+    try {
+      const ExcelJS = require('exceljs');
+      const rows = await def.fetch(req.query);
+      const wb   = new ExcelJS.Workbook();
+      wb.creator  = 'WTG Commuters Guide';
+      wb.created  = new Date();
+      const ws    = wb.addWorksheet(def.title);
+
+      /* WTG brand green */
+      const BRAND_HEX = 'FF4D5D53';
+
+      if (rows.length > 0) {
+        const keys = Object.keys(rows[0]);
+
+        /* Smart column widths: date cols wider, number cols narrower */
+        ws.columns = keys.map(h => {
+          let width = 16;
+          if (/date/i.test(h))        width = 14;
+          if (/id|route/i.test(h))    width = 24;
+          if (/origin|dest/i.test(h)) width = 20;
+          if (isNumericKey(h))        width = 14;
+          return { header: prettyHeader(h), key: h, width };
+        });
+
+        /* Style header row */
+        ws.getRow(1).eachCell(cell => {
+          cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: BRAND_HEX } };
+          cell.font      = { bold: true, color: { argb: 'FFFFFFFF' }, size: 10 };
+          cell.alignment = { vertical: 'middle', horizontal: 'center', wrapText: false };
+          cell.border    = { bottom: { style: 'medium', color: { argb: 'FF2C3A30' } } };
+        });
+        ws.getRow(1).height = 22;
+
+        /* Freeze header row */
+        ws.views = [{ state: 'frozen', ySplit: 1 }];
+
+        /* Add data rows with formatting */
+        rows.forEach((r, ri) => {
+          const rowData = {};
+          keys.forEach(h => { rowData[h] = formatVal(r[h]); });
+          const wsRow = ws.addRow(rowData);
+          wsRow.height = 18;
+
+          /* Alternating row fill */
+          const fillColor = ri % 2 === 0 ? 'FFFFFFFF' : 'FFF5F5F3';
+          wsRow.eachCell({ includeEmpty: true }, (cell, colNum) => {
+            const key = keys[colNum - 1];
+            cell.fill      = { type: 'pattern', pattern: 'solid', fgColor: { argb: fillColor } };
+            cell.alignment = { vertical: 'middle', horizontal: isNumericKey(key) ? 'right' : 'left' };
+            cell.border    = {
+              top:    { style: 'hair', color: { argb: 'FFD1D5DB' } },
+              bottom: { style: 'hair', color: { argb: 'FFD1D5DB' } },
+              left:   { style: 'hair', color: { argb: 'FFD1D5DB' } },
+              right:  { style: 'hair', color: { argb: 'FFD1D5DB' } }
+            };
+            cell.font = { size: 9 };
+          });
+        });
+
+        /* Auto-filter on header */
+        ws.autoFilter = { from: 'A1', to: `${String.fromCharCode(64 + keys.length)}1` };
+
+        /* Metadata row at bottom */
+        ws.addRow([]);
+        const metaRow = ws.addRow([`Generated: ${new Date().toLocaleString('en-PH')}  |  WTG Commuters Guide — ${def.title}`]);
+        metaRow.getCell(1).font = { italic: true, size: 8, color: { argb: 'FF9CA3AF' } };
+
+      } else {
+        ws.addRow(['No data found for the selected filters.']);
+      }
+
+      const fname = `${report}-${new Date().toISOString().slice(0,10)}.xlsx`;
+      res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet');
+      res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+      await wb.xlsx.write(res);
+      res.end();
+    } catch (err) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        return res.status(500).json({ error: 'exceljs not installed. Run: npm install exceljs' });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  /* ------------------------------------------------------- PDF EXPORT --------------------------------------------------------------------------------------- */
+
+  router.get('/export/pdf', verifyAdmin, async (req, res) => {
+    const report = req.query.report || 'route-usage';
+    const def = REPORT_MAP[report];
+    if (!def) return res.status(400).json({ error: 'Unknown report' });
+
+    try {
+      const PDFDocument = require('pdfkit');
+      const rows = await def.fetch(req.query);
+      const fname = `${report}-${new Date().toISOString().slice(0,10)}.pdf`;
+
+      res.setHeader('Content-Type', 'application/pdf');
+      res.setHeader('Content-Disposition', `attachment; filename="${fname}"`);
+
+      const MARGIN  = 40;
+      const doc = new PDFDocument({ margin: MARGIN, size: 'A4', layout: 'landscape' });
+      doc.pipe(res);
+
+      const PAGE_W  = doc.page.width;
+      const PAGE_H  = doc.page.height;
+      const CONTENT_W = PAGE_W - MARGIN * 2;
+
+      /* ── Title block ── */
+      doc.rect(0, 0, PAGE_W, 52).fill('#4d5d53');
+      doc.fillColor('#ffffff').fontSize(16).font('Helvetica-Bold')
+         .text(def.title, MARGIN, 14, { width: CONTENT_W, align: 'left' });
+      doc.fillColor('rgba(255,255,255,0.7)').fontSize(8).font('Helvetica')
+         .text(
+           `WTG Commuters Guide  ·  Generated ${new Date().toLocaleDateString('en-PH', { year:'numeric', month:'long', day:'numeric' })}`,
+           MARGIN, 34, { width: CONTENT_W, align: 'left' }
+         );
+
+      let y = 68;
+
+      if (!rows.length) {
+        doc.fillColor('#333').fontSize(11).text('No data found for the selected filters.', MARGIN, y);
+        doc.end();
+        return;
+      }
+
+      const keys    = Object.keys(rows[0]);
+
+      /* Smart column width ratios based on key type */
+      const rawWeights = keys.map(h => {
+        if (/id|route_id/i.test(h))    return 3.0;
+        if (/origin|dest/i.test(h))    return 2.5;
+        if (/date/i.test(h))           return 2.0;
+        if (isNumericKey(h))           return 1.2;
+        return 1.8;
+      });
+      const totalWeight = rawWeights.reduce((a, b) => a + b, 0);
+      const colWidths   = rawWeights.map(w => Math.floor((w / totalWeight) * CONTENT_W));
+
+      const ROW_H   = 20;
+      const HDR_H   = 24;
+      const FONT_SZ = 7.5;
+
+      /* ── Draw table header ── */
+      const drawHeader = (yPos) => {
+        doc.rect(MARGIN, yPos, CONTENT_W, HDR_H).fill('#4d5d53');
+        let x = MARGIN;
+        keys.forEach((h, i) => {
+          doc.fillColor('#ffffff').fontSize(FONT_SZ).font('Helvetica-Bold')
+             .text(
+               prettyHeader(h).toUpperCase(),
+               x + 4, yPos + 7,
+               { width: colWidths[i] - 8, lineBreak: false, ellipsis: true }
+             );
+          x += colWidths[i];
+        });
+        return yPos + HDR_H;
+      };
+
+      /* ── Draw a single data row ── */
+      const drawRow = (row, ri, yPos) => {
+        /* Alternating background */
+        if (ri % 2 === 0) {
+          doc.rect(MARGIN, yPos, CONTENT_W, ROW_H).fill('#F8F8F8');
+        } else {
+          doc.rect(MARGIN, yPos, CONTENT_W, ROW_H).fill('#ffffff');
+        }
+        /* Bottom border */
+        doc.moveTo(MARGIN, yPos + ROW_H).lineTo(MARGIN + CONTENT_W, yPos + ROW_H)
+           .strokeColor('#E5E7EB').lineWidth(0.4).stroke();
+
+        let x = MARGIN;
+        keys.forEach((h, i) => {
+          const raw = row[h];
+          const val = String(formatVal(raw));
+          const align = isNumericKey(h) ? 'right' : 'left';
+          const xText = align === 'right' ? x + 4 : x + 4;
+          doc.fillColor('#1F2937').fontSize(FONT_SZ).font('Helvetica')
+             .text(val, xText, yPos + 6,
+               { width: colWidths[i] - 8, lineBreak: false, ellipsis: true, align });
+          x += colWidths[i];
+        });
+      };
+
+      /* ── Render header then rows ── */
+      y = drawHeader(y);
+
+      let pageNum = 1;
+      rows.slice(0, 500).forEach((row, ri) => {
+        /* New page if needed */
+        if (y + ROW_H > PAGE_H - 30) {
+          /* Footer on current page */
+          doc.fillColor('#9CA3AF').fontSize(7).font('Helvetica')
+             .text(`Page ${pageNum}  ·  WTG Commuters Guide`, MARGIN, PAGE_H - 22, { width: CONTENT_W, align: 'center' });
+          doc.addPage({ layout: 'landscape' });
+          pageNum++;
+          y = drawHeader(MARGIN);
+        }
+        drawRow(row, ri, y);
+        y += ROW_H;
+      });
+
+      /* ── Left/right table borders ── */
+      doc.moveTo(MARGIN, 68).lineTo(MARGIN, y).strokeColor('#D1D5DB').lineWidth(0.5).stroke();
+      doc.moveTo(MARGIN + CONTENT_W, 68).lineTo(MARGIN + CONTENT_W, y).stroke();
+
+      /* ── Footer ── */
+      if (rows.length > 500) {
+        doc.fillColor('#9CA3AF').fontSize(7)
+           .text(`Note: Showing first 500 of ${rows.length} rows. Use CSV/Excel for full data.`, MARGIN, y + 6);
+      }
+      doc.fillColor('#9CA3AF').fontSize(7).font('Helvetica')
+         .text(`Page ${pageNum}  ·  WTG Commuters Guide`, MARGIN, PAGE_H - 22, { width: CONTENT_W, align: 'center' });
+
+      doc.end();
+    } catch (err) {
+      if (err.code === 'MODULE_NOT_FOUND') {
+        return res.status(500).json({ error: 'pdfkit not installed. Run: npm install pdfkit' });
+      }
+      res.status(500).json({ error: err.message });
+    }
+  });
+
+  module.exports = router;

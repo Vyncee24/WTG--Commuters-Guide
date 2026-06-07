@@ -309,7 +309,6 @@ async function setupDatabase() {
         user_id    INT          NOT NULL,
         route_id   VARCHAR(100) NOT NULL,
         comment    TEXT         NOT NULL,
-        rating     INT CHECK (rating >= 1 AND rating <= 5),
         created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
         FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
         INDEX (route_id),
@@ -357,22 +356,29 @@ async function setupDatabase() {
     }
     console.log(`\n  ${inserted} route(s) inserted, ${SEED_ROUTES.length - inserted} already present.`);
 
-    // 7. Default admin user
-    const adminEmail = 'janvincentreyel24@gmail.com';
-    const [existingAdmin] = await connection.query(
-      'SELECT id FROM users WHERE email = ?',
-      [adminEmail]
-    );
+    // 7. Default admin user (credentials must be set in .env)
+    const adminEmail    = process.env.ADMIN_EMAIL;
+    const adminPassword = process.env.ADMIN_PASSWORD;
 
-    if (existingAdmin.length === 0) {
-      const hashedPassword = await bcrypt.hash('janvincentreyel2406', 10);
-      await connection.query(
-        'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
-        ['Admin', adminEmail, hashedPassword, 'admin']
-      );
-      console.log('\n✓ Default admin user created');
+    if (!adminEmail || !adminPassword) {
+      console.log('\n⚠ ADMIN_EMAIL or ADMIN_PASSWORD not set in .env — skipping admin seed.');
+      console.log('  Add them to your .env file and re-run to create the admin account.');
     } else {
-      console.log('\n✓ Admin user already exists');
+      const [existingAdmin] = await connection.query(
+        'SELECT id FROM users WHERE email = ?',
+        [adminEmail]
+      );
+
+      if (existingAdmin.length === 0) {
+        const hashedPassword = await bcrypt.hash(adminPassword, 10);
+        await connection.query(
+          'INSERT INTO users (name, email, password, role) VALUES (?, ?, ?, ?)',
+          ['Admin', adminEmail, hashedPassword, 'admin']
+        );
+        console.log('\n✓ Default admin user created');
+      } else {
+        console.log('\n✓ Admin user already exists');
+      }
     }
 
     console.log('\n✅ Database setup completed successfully!');
