@@ -5,12 +5,12 @@ const ROUTES = (() => {
     : `${window.location.origin}/api/routes`;
 
   const TRANSPORT_ICONS = {
-    jeep: '🚐', bus: '🚌', tricycle: '🛺',
+    jeep: '🚐', bus: '🚌', baby_bus: '🚌', tricycle: '🛺',
     walk: '🚶', fx: '🚙', uv: '🚐'
   };
 
   const TRANSPORT_CLASS = {
-    jeep: 'transport-jeep', bus: 'transport-bus',
+    jeep: 'transport-jeep', bus: 'transport-bus', baby_bus: 'transport-bus',
     tricycle: 'transport-tricycle', walk: 'transport-walk',
     fx: 'transport-jeep', uv: 'transport-jeep'
   };
@@ -118,15 +118,22 @@ const ROUTES = (() => {
   }
 
   function renderStep(step, total, isLast) {
-    const transport = (step.transport || '').toLowerCase();
-    const icon  = TRANSPORT_ICONS[transport] || '🚌';
-    const tClass = TRANSPORT_CLASS[transport] || 'transport-jeep';
+    /* Support comma-separated transport values (e.g. "jeep,bus") */
+    const transports = (step.transport || '').toLowerCase().split(',').map(t => t.trim()).filter(Boolean);
+    const primary    = transports[0] || '';
+    const tClass     = TRANSPORT_CLASS[primary] || 'transport-jeep';
     const signboardHtml = step.signboard
       ? `<div class="step-signboard">⚠️ ${step.signboard}</div>` : '';
     const fareHtml = step.fare
       ? `<span class="badge badge-green">Fare: ${step.fare}</span>` : '';
     const alightHtml = step.alightAt
       ? `<div class="mt-12 text-sm" style="color:var(--text2);">📍 Arrive at: <strong style="color:var(--text)">${step.alightAt}</strong></div>` : '';
+    /* Build one icon+badge per transport type */
+    const transportBadgesHtml = transports.map(t => {
+      const icon = TRANSPORT_ICONS[t] || '🚌';
+      const tc   = TRANSPORT_CLASS[t]  || 'transport-jeep';
+      return `<span class="transport-icon ${tc}">${icon}</span><span class="badge badge-blue">${t.replace('_',' ').toUpperCase()}</span>`;
+    }).join('');
 
     return `
       <div class="step-item fade-in">
@@ -139,8 +146,7 @@ const ROUTES = (() => {
             <div class="step-card-header">
               <div>
                 <div class="d-flex align-center gap-8 mb-8">
-                  <span class="transport-icon ${tClass}">${icon}</span>
-                  <span class="badge badge-blue">${(step.transport || '').toUpperCase()}</span>
+                  ${transportBadgesHtml}
                   ${fareHtml}
                 </div>
                 <div class="step-title">${step.title}</div>

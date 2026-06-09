@@ -20,6 +20,23 @@ const ADMIN = (() => {
     return String(s ?? '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
   }
 
+  /* ------------------------------------------------------- TRANSPORT CHECKBOX HELPERS --------------------------------------------------------------------------------------- */
+  function _getCheckedTransport(containerId) {
+    const boxes = document.querySelectorAll(`#${containerId} input[type="checkbox"]:checked`);
+    return Array.from(boxes).map(b => b.value).join(',') || null;
+  }
+
+  function _setCheckedTransport(containerId, value) {
+    const values = (value || '').split(',').map(v => v.trim()).filter(Boolean);
+    document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => {
+      cb.checked = values.includes(cb.value);
+    });
+  }
+
+  function _clearCheckedTransport(containerId) {
+    document.querySelectorAll(`#${containerId} input[type="checkbox"]`).forEach(cb => { cb.checked = false; });
+  }
+
   function formatDate(ts) {
     if (!ts) return '—';
     return new Date(ts).toLocaleDateString('en-PH', { year:'numeric', month:'short', day:'numeric' });
@@ -483,11 +500,14 @@ const ADMIN = (() => {
         headers: { 'Authorization': `Bearer ${token}` }
       });
       if (!res.ok) { TOAST.show('Export failed: ' + res.status, 'error'); return; }
+      const disposition = res.headers.get('Content-Disposition') || '';
+      const fnMatch = disposition.match(/filename="([^"]+)"/);
+      const filename = (fnMatch && fnMatch[1]) || 'wtg_commuters_guide.sql';
       const blob = await res.blob();
       const url = URL.createObjectURL(blob);
       const a = document.createElement('a');
       a.href = url;
-      a.download = 'wtg_database.sql';
+      a.download = filename;
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
@@ -575,7 +595,7 @@ const ADMIN = (() => {
   function openAddRouteModal() {
     _addRouteStepCount=0;
     ['ar-route-id','ar-from','ar-to','ar-duration','ar-fare','ar-tags','ar-map-embed-url'].forEach(id=>{const el=document.getElementById(id);if(el)el.value='';});
-    const t=document.getElementById('ar-transport'); if(t)t.value='jeep';
+    _clearCheckedTransport('ar-transport');
     const list=document.getElementById('ar-steps-list'); if(list)list.innerHTML='';
     const hint=document.getElementById('ar-no-steps-hint'); if(hint)hint.style.display='';
     document.getElementById('add-route-modal').classList.remove('hidden');
@@ -597,7 +617,7 @@ const ADMIN = (() => {
       </div>
       <div class="form-group"><label class="form-label">Title <span style="color:var(--red);">*</span></label><input class="form-control" name="step-title" type="text" placeholder="e.g. Ride a Jeepney"/></div>
       <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;">
-        <div class="form-group"><label class="form-label">Transport <span style="color:var(--red);">*</span></label><select class="form-control" name="step-transport"><option value="jeep">Jeep</option><option value="bus">Bus</option><option value="tricycle">Tricycle</option><option value="walk">Walk</option><option value="fx">FX</option><option value="uv">UV Express</option></select></div>
+        <div class="form-group"><label class="form-label">Transport <span style="color:var(--red);">*</span></label><div name="step-transport-group" style="display:flex;flex-wrap:wrap;gap:6px;padding:8px 10px;border:1px solid var(--border);border-radius:var(--radius);background:var(--bg);"><label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" name="step-transport" value="jeep"/> Jeep</label><label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" name="step-transport" value="bus"/> Bus</label><label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" name="step-transport" value="baby_bus"/> Baby Bus</label><label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" name="step-transport" value="tricycle"/> Tricycle</label><label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" name="step-transport" value="walk"/> Walk</label><label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" name="step-transport" value="fx"/> FX</label><label style="display:flex;align-items:center;gap:4px;font-size:12px;cursor:pointer;"><input type="checkbox" name="step-transport" value="uv"/> UV Express</label></div></div>
         <div class="form-group"><label class="form-label">Fare</label><input class="form-control" name="step-fare" type="text" onblur="ADMIN.formatFare(this)"/></div>
       </div>
       <div class="form-group"><label class="form-label">Instruction <span style="color:var(--red);">*</span></label><textarea class="form-control" name="step-instruction" rows="2"></textarea></div>
@@ -631,7 +651,8 @@ const ADMIN = (() => {
       const title=block.querySelector('[name="step-title"]').value.trim();
       const instruction=block.querySelector('[name="step-instruction"]').value.trim();
       if(!title||!instruction){TOAST.show(`Step ${n}: Title and Instruction required.`,'error');return null;}
-      steps.push({num:n++,title,transport:block.querySelector('[name="step-transport"]').value,instruction,signboard:block.querySelector('[name="step-signboard"]').value.trim()||null,alightAt:block.querySelector('[name="step-alight"]').value.trim()||null,fare:block.querySelector('[name="step-fare"]').value.trim()||null,mapEmbed:block.querySelector('[name="step-map-embed"]').value.trim()||null});
+      const stepTransport = Array.from(block.querySelectorAll('[name="step-transport"]:checked')).map(cb => cb.value).join(',') || null;
+      steps.push({num:n++,title,transport:stepTransport,instruction,signboard:block.querySelector('[name="step-signboard"]').value.trim()||null,alightAt:block.querySelector('[name="step-alight"]').value.trim()||null,fare:block.querySelector('[name="step-fare"]').value.trim()||null,mapEmbed:block.querySelector('[name="step-map-embed"]').value.trim()||null});
     }
     return steps;
   }
@@ -642,7 +663,7 @@ const ADMIN = (() => {
     const toLocation=document.getElementById('ar-to').value.trim();
     const duration=document.getElementById('ar-duration').value.trim();
     const fare=document.getElementById('ar-fare').value.trim();
-    const transportType=document.getElementById('ar-transport').value;
+    const transportType=_getCheckedTransport('ar-transport');
     const tagsRaw=document.getElementById('ar-tags').value.trim();
     const mapEmbedUrl=document.getElementById('ar-map-embed-url').value.trim();
     if(!fromLocation){TOAST.show('From location required.','error');return;}
@@ -672,7 +693,7 @@ const ADMIN = (() => {
       document.getElementById('er-to').value=r.to_location||'';
       document.getElementById('er-duration').value=r.duration||'';
       document.getElementById('er-fare').value=r.fare||'';
-      document.getElementById('er-transport').value=r.transport_type||'jeep';
+      _setCheckedTransport('er-transport', r.transport_type||'');
       document.getElementById('er-tags').value=(r.tags||[]).join(', ');
       document.getElementById('er-map-embed-url').value=r.map_embed_url||'';
       const list=document.getElementById('er-steps-list'); list.innerHTML='';
@@ -682,7 +703,8 @@ const ADMIN = (() => {
         const block=list.children[i];
         if(!block)return;
         block.querySelector('[name="step-title"]').value=s.title||'';
-        block.querySelector('[name="step-transport"]').value=s.transport||'jeep';
+        const stepTransportVals = (s.transport || '').split(',').map(v => v.trim()).filter(Boolean);
+        block.querySelectorAll('[name="step-transport"]').forEach(cb => { cb.checked = stepTransportVals.includes(cb.value); });
         block.querySelector('[name="step-instruction"]').value=s.instruction||'';
         block.querySelector('[name="step-signboard"]').value=s.signboard||'';
         block.querySelector('[name="step-alight"]').value=s.alightAt||'';
@@ -711,7 +733,7 @@ const ADMIN = (() => {
     const toLocation=document.getElementById('er-to').value.trim();
     const duration=document.getElementById('er-duration').value.trim();
     const fare=document.getElementById('er-fare').value.trim();
-    const transportType=document.getElementById('er-transport').value;
+    const transportType=_getCheckedTransport('er-transport');
     const tagsRaw=document.getElementById('er-tags').value.trim();
     const mapEmbedUrl=document.getElementById('er-map-embed-url').value.trim();
     if(!fromLocation||!toLocation){TOAST.show('From and To are required.','error');return;}
@@ -734,6 +756,7 @@ const ADMIN = (() => {
 
   return {
     navigate, renderDashboard, renderUsers, renderAllComments, renderRoutes,
+    _getCheckedTransport, _setCheckedTransport, _clearCheckedTransport,
     renderAnalytics, analyticsTab, runRollup, runDrilldown, runSlice, runDice,
     loadReport, reportTab, exportReport,
     runETL, checkETLStatus,
